@@ -1,0 +1,5 @@
+anthropic>=0.70
+requests>=2.32
+websocket-client>=1.8
+pypdf>=5.0
+beautifulsoup4>=4.12
