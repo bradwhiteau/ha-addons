@@ -123,19 +123,33 @@ class Claude:
         self.triage_model = triage_model
         self.reasoning_model = reasoning_model
 
+    # Models that reject a forced tool_choice; learned at runtime.
+    _no_forced_tool: set = set()
+
     def _call(self, model: str, system: str, user: str, tool: dict, max_tokens: int = 1024) -> dict:
-        resp = self.client.messages.create(
-            model=model,
-            max_tokens=max_tokens,
-            system=system,
-            tools=[tool],
-            tool_choice={"type": "tool", "name": tool["name"]},
-            messages=[{"role": "user", "content": user}],
-        )
-        for block in resp.content:
-            if block.type == "tool_use":
-                log.debug("%s -> %s", tool["name"], json.dumps(block.input)[:500])
-                return dict(block.input)
+        system = system + f"\n\nAlways answer by calling the {tool['name']} tool exactly once. Do not reply in plain text."
+        messages = [{"role": "user", "content": user}]
+        for attempt in range(2):
+            kwargs = dict(model=model, max_tokens=max_tokens, system=system, tools=[tool], messages=messages)
+            if model not in self._no_forced_tool:
+                kwargs["tool_choice"] = {"type": "tool", "name": tool["name"]}
+            try:
+                resp = self.client.messages.create(**kwargs)
+            except anthropic.BadRequestError as exc:
+                if "tool_choice" in str(exc) and model not in self._no_forced_tool:
+                    log.info("%s doesn't support forced tool use; switching to auto", model)
+                    self._no_forced_tool.add(model)
+                    continue
+                raise
+            for block in resp.content:
+                if block.type == "tool_use" and block.name == tool["name"]:
+                    log.debug("%s -> %s", tool["name"], json.dumps(block.input)[:500])
+                    return dict(block.input)
+            # answered in text instead; ask once more
+            messages = messages + [
+                {"role": "assistant", "content": resp.content},
+                {"role": "user", "content": f"Please record your answer with the {tool['name']} tool."},
+            ]
         raise RuntimeError(f"No tool output from {model}")
 
     def triage(self, em: Email) -> dict:

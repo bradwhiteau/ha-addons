@@ -150,6 +150,7 @@ class Triage:
 
     def handle_uid(self, uid: int) -> bool:
         attempts = self.state.setdefault("attempts", {})
+        em = None
         try:
             em = self.box.fetch(uid)
             if em is None:
@@ -164,6 +165,12 @@ class Triage:
             self.box.close()
             if n >= MAX_ATTEMPTS:
                 log.error("Giving up on UID %s after %s attempts", uid, n)
+                if em is not None:
+                    now = datetime.now(TZ).strftime("%Y-%m-%d %H:%M")
+                    actions.sheet_log(self.cfg, "Triage log", [
+                        now, em.from_name, em.from_addr, em.subject, "error", "",
+                        "Could not be triaged", f"Skipped after {n} attempts: {str(exc)[:150]}", em.link,
+                    ])
                 return True
             return False
 
