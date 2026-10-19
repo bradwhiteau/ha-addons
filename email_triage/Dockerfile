@@ -9,4 +9,5 @@ RUN pip3 install --no-cache-dir --break-system-packages -r /app/requirements.txt
 
 COPY app/ /app/
 
+ENTRYPOINT []
 CMD ["python3", "-u", "/app/main.py"]

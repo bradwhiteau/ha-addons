@@ -8,6 +8,7 @@ few minutes catches anything if an event is ever dropped.
 """
 from __future__ import annotations
 
+import imaplib
 import json
 import logging
 import os
@@ -49,7 +50,12 @@ def load_config() -> dict:
     missing = [k for k in ("gmail_address", "gmail_app_password", "anthropic_api_key") if not cfg.get(k)]
     if missing:
         raise SystemExit(f"Missing settings: {', '.join(missing)}. Fill them in on the add-on's Configuration tab.")
-    cfg["gmail_app_password"] = cfg["gmail_app_password"].replace(" ", "")
+    # app passwords are shown as "abcd efgh ijkl mnop"; drop any spaces or stray newlines
+    cfg["gmail_app_password"] = "".join(cfg["gmail_app_password"].split())
+    cfg["gmail_address"] = cfg["gmail_address"].strip()
+    for key in ("anthropic_api_key", "todoist_api_token", "sheet_webhook_secret", "sheet_webhook_url"):
+        if isinstance(cfg.get(key), str):
+            cfg[key] = cfg[key].strip()
     return cfg
 
 
@@ -70,9 +76,21 @@ def save_state(state: dict) -> None:
 
 # ---------------------------------------------------------------- HA event listener
 
+def supervisor_token() -> str | None:
+    token = os.environ.get("SUPERVISOR_TOKEN")
+    if not token:
+        try:
+            with open("/run/s6/container_environment/SUPERVISOR_TOKEN") as f:
+                token = f.read().strip()
+            os.environ["SUPERVISOR_TOKEN"] = token
+        except OSError:
+            token = None
+    return token or None
+
+
 def listen_for_mail_events() -> None:
     """Subscribe to imap_content events; any event wakes the worker."""
-    token = os.environ.get("SUPERVISOR_TOKEN")
+    token = supervisor_token()
     if not token:
         log.warning("No SUPERVISOR_TOKEN: relying on the timed sweep only")
         return
@@ -258,6 +276,7 @@ def main() -> None:
     logging.getLogger("httpx").setLevel(logging.WARNING)
     log.info("Email Triage starting%s", " in DRY RUN mode (no changes will be made)" if cfg["dry_run"] else "")
 
+    supervisor_token()  # load it early so notifications can use it too
     triage = Triage(cfg)
     threading.Thread(target=listen_for_mail_events, daemon=True).start()
 
@@ -273,6 +292,16 @@ def main() -> None:
             wake.get_nowait()
         try:
             triage.run_once()
+        except imaplib.IMAP4.error as exc:
+            if "AUTHENTICATIONFAILED" in str(exc):
+                log.error("Gmail rejected the login. Check gmail_address and gmail_app_password "
+                          "(a 16-letter app password, not your normal Google password). Retrying in 5 minutes.")
+                triage.box.close()
+                time.sleep(300)
+            else:
+                log.exception("Run failed: %s", exc)
+                triage.box.close()
+                time.sleep(30)
         except Exception as exc:
             log.exception("Run failed: %s", exc)
             triage.box.close()

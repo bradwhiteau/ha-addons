@@ -1,5 +1,5 @@
 name: Email Triage
-version: "0.1.1"
+version: "0.1.2"
 slug: email_triage
 description: Triages new Gmail with Claude - junk, urgent alerts, bills to Todoist, draft replies.
 url: https://github.com/bradwhiteau/ha-addons
