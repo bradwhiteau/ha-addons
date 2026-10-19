@@ -1,5 +1,5 @@
 name: Email Triage
-version: "0.1.0"
+version: "0.1.1"
 slug: email_triage
 description: Triages new Gmail with Claude - junk, urgent alerts, bills to Todoist, draft replies.
 url: https://github.com/bradwhiteau/ha-addons
@@ -20,8 +20,6 @@ options:
   todoist_api_token: ""
   todoist_bills_project_id: "6hp9Xx2QcMx5pw2h"
   notify_service: mobile_app_ecto_9
-  sheet_webhook_url: ""
-  sheet_webhook_secret: ""
   auto_unsubscribe: true
   create_drafts: true
   sweep_minutes: 10
@@ -36,7 +34,7 @@ schema:
   todoist_api_token: password
   todoist_bills_project_id: str
   notify_service: str
-  sheet_webhook_url: url?
+  sheet_webhook_url: str?
   sheet_webhook_secret: password?
   auto_unsubscribe: bool
   create_drafts: bool
