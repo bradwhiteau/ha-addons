@@ -8,9 +8,22 @@ Reads each new email in your Gmail inbox the moment it arrives and handles it wi
 | Marketing from real companies | Unsubscribed using Gmail's one-click standard, only when Gmail verified the sender. Logged with a link back to the email. Otherwise logged as "check manually". |
 | Urgent | Push notification to your phone with the subject and why it matters. |
 | Bills | Todoist task in **Bills**: amount, due date, payment link, BPAY or BSB/account, link to the email. If a regular biller's bank details change, the task and a phone alert are flagged ⚠️. |
+| SEEK job alerts | Sent to the **Career Counsellor** (below). Never unsubscribed. |
+| Oncore "Timesheet Received" | ✅ phone tick and a log entry. |
 | Needs a reply | Draft reply saved in Gmail Drafts (label `AI draft`), original labelled `AI/Draft ready`. Your Proactive Check-in lists them. **Never sent.** |
 
 Every email it handles gets the `AI/Triaged` label, and every decision is written to the **Triage log** tab of the *Email Unsubscribe Log* sheet.
+
+## Career Counsellor
+
+Each SEEK alert is split into roles and scored against two docs in Drive: **Job Search Criteria** (04 Career / Career Counsellor, what you want and don't) and your **Master Career Profile & Cover Letter Dossier** (your background and wins). Good fits (up to 5 per alert) come to your phone with **Interested** / **Not for me** buttons. Tap **Interested** and it:
+
+1. reads the full ad on SEEK (or writes from the alert summary if it can't),
+2. drafts a cover letter to your rules and saves it as a Google Doc in 04 Career / Career Counsellor,
+3. adds "Apply: role - company" to Todoist General To Do (due tomorrow) with links to the draft, the ad and your resume,
+4. adds a calendar reminder for tomorrow at `career_reminder_time`.
+
+Every role, including the ones it skipped and why, goes on the **Job matches** tab. It never applies for anything.
 
 ## What it will never do
 
@@ -36,6 +49,11 @@ Home Assistant's IMAP integration fires an `imap_content` event when mail arrive
 | `sheet_webhook_url` / `sheet_webhook_secret` | From the sheet logger Apps Script. |
 | `auto_unsubscribe` | Turn off to log marketing without unsubscribing. |
 | `create_drafts` | Turn off to stop draft replies. |
+| `never_unsubscribe` | Sender domains that are never unsubscribed (keep list). |
+| `assistant_live` | Career Counsellor and timesheet tick run for real even in dry run. Turn off to test them quietly too. |
+| `career_enabled` | Turn the Career Counsellor on or off. |
+| `todoist_career_project_id` | Where application to-dos go (General To Do). |
+| `career_reminder_time` | Time of the next-day application reminder (24h, Perth). |
 
 ## Costs
 

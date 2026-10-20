@@ -28,7 +28,8 @@ def _now() -> str:
 
 # ---------------------------------------------------------------- Home Assistant
 
-def notify(service: str, title: str, message: str, url: str | None, dry_run: bool) -> None:
+def notify(service: str, title: str, message: str, url: str | None, dry_run: bool,
+           extra: dict | None = None, channel: str = "Email triage") -> None:
     if dry_run:
         log.info("[dry run] would notify %s: %s | %s", service, title, message)
         return
@@ -37,8 +38,12 @@ def notify(service: str, title: str, message: str, url: str | None, dry_run: boo
         log.warning("No SUPERVISOR_TOKEN; cannot send notification")
         return
     data = {"title": title[:80], "message": message[:400]}
+    payload = {"channel": channel, "importance": "high"}
     if url:
-        data["data"] = {"clickAction": url, "url": url, "channel": "Email triage", "importance": "high"}
+        payload.update({"clickAction": url, "url": url})
+    if extra:
+        payload.update(extra)
+    data["data"] = payload
     r = requests.post(
         f"{SUPERVISOR}/services/notify/{service}",
         headers={"Authorization": f"Bearer {token}"},
@@ -66,6 +71,21 @@ def sheet_log(cfg: dict, sheet: str, row: list) -> None:
             log.warning("Sheet log failed (%s): %s", r.status_code, r.text[:200])
     except requests.RequestException as exc:
         log.warning("Sheet log failed: %s", exc)
+
+
+def gscript(cfg: dict, action: str, **payload) -> dict:
+    """Call the Apps Script helper (profile docs, cover letter docs, calendar)."""
+    url = cfg.get("sheet_webhook_url")
+    if not url:
+        raise RuntimeError("sheet_webhook_url is not set")
+    r = requests.post(url, json={"secret": cfg.get("sheet_webhook_secret", ""), "action": action, **payload}, timeout=60)
+    try:
+        data = r.json()
+    except ValueError:
+        raise RuntimeError(f"Apps Script '{action}' returned: {r.text[:200]}")
+    if not data.get("ok"):
+        raise RuntimeError(f"Apps Script '{action}' failed: {data.get('error')}")
+    return data
 
 
 # ---------------------------------------------------------------- unsubscribe
@@ -175,11 +195,12 @@ def bill_task_text(em: Email, bill: dict, changed: list[str]) -> tuple[str, str]
     return title, "\n".join(lines)
 
 
-def add_todoist_task(cfg: dict, title: str, description: str, due_date: str | None, urgent: bool, dry_run: bool) -> str | None:
+def add_todoist_task(cfg: dict, title: str, description: str, due_date: str | None, urgent: bool, dry_run: bool,
+                     project_id: str | None = None) -> str | None:
     payload = {
         "content": title,
         "description": description,
-        "project_id": cfg["todoist_bills_project_id"],
+        "project_id": project_id or cfg["todoist_bills_project_id"],
         "priority": 4 if urgent else 3,
     }
     if due_date and re.fullmatch(r"\d{4}-\d{2}-\d{2}", due_date):

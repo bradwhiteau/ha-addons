@@ -13,6 +13,7 @@ import json
 import logging
 import os
 import queue
+import re
 import threading
 import time
 from datetime import datetime
@@ -21,6 +22,7 @@ from zoneinfo import ZoneInfo
 import websocket
 
 import actions
+from career import Career
 from llm import Claude
 from mail import Email, Mailbox, one_click_unsubscribe_url
 
@@ -37,9 +39,12 @@ LABEL_BILL = "AI/Bill"
 LABEL_URGENT = "AI/Urgent"
 LABEL_DRAFT_READY = "AI/Draft ready"
 LABEL_DRAFT = "AI draft"
+LABEL_JOBS = "AI/Job alert"
+LABEL_TIMESHEET = "AI/Timesheet confirmed"
 
 log = logging.getLogger("triage")
 wake = queue.Queue()
+career_actions = queue.Queue()
 
 
 # ---------------------------------------------------------------- config & state
@@ -103,14 +108,23 @@ def listen_for_mail_events() -> None:
             if auth.get("type") != "auth_ok":
                 raise RuntimeError(f"HA auth failed: {auth}")
             ws.send(json.dumps({"id": 1, "type": "subscribe_events", "event_type": "imap_content"}))
+            ws.send(json.dumps({"id": 2, "type": "subscribe_events", "event_type": "mobile_app_notification_action"}))
             ws.settimeout(None)
             log.info("Listening for new-mail events from Home Assistant")
             while True:
                 msg = json.loads(ws.recv())
-                if msg.get("type") == "event":
-                    data = msg["event"].get("data", {})
-                    log.debug("imap_content: %s | %s", data.get("sender"), data.get("subject"))
-                    wake.put("event")
+                if msg.get("type") != "event":
+                    continue
+                event = msg["event"]
+                data = event.get("data", {})
+                if event.get("event_type") == "mobile_app_notification_action":
+                    action = str(data.get("action", ""))
+                    if action.startswith("CAREER_"):
+                        log.info("Button pressed: %s", action)
+                        career_actions.put(action)
+                    continue
+                log.debug("imap_content: %s | %s", data.get("sender"), data.get("subject"))
+                wake.put("event")
         except Exception as exc:
             log.warning("Event connection lost (%s); reconnecting in 30s", exc)
             time.sleep(30)
@@ -124,6 +138,8 @@ class Triage:
         self.dry = cfg["dry_run"]
         self.box = Mailbox(cfg["gmail_address"], cfg["gmail_app_password"], self.dry)
         self.claude = Claude(cfg["anthropic_api_key"], cfg["triage_model"], cfg["reasoning_model"])
+        self.career = Career(cfg, self.claude) if cfg.get("career_enabled", True) else None
+        self.assistant_live = cfg.get("assistant_live", True)
         self.state = load_state()
 
     def tag(self, text: str) -> str:
@@ -179,6 +195,34 @@ class Triage:
             return
         if em.from_addr == self.cfg["gmail_address"].lower():
             return  # Brad's own mail
+        now = datetime.now(TZ).strftime("%Y-%m-%d %H:%M")
+
+        # Oncore confirming it received the weekly timesheet
+        if em.from_domain.endswith("oncoreservices.com") and "timesheet received" in em.subject.lower():
+            m = re.search(r"period ending\s+(\d{1,2}\s+\w+\s+\d{4})", em.body, re.I)
+            period = f" for the week ending {m.group(1)}" if m else ""
+            actions.notify(self.cfg["notify_service"], "✅ Timesheet received",
+                           f"Oncore confirmed it received your timesheet{period}.", em.link,
+                           not self.assistant_live, channel="Timesheets")
+            self.box.add_labels(em.uid, [LABEL_DONE, LABEL_TIMESHEET])
+            actions.sheet_log(self.cfg, "Triage log", [
+                now, em.from_name, em.from_addr, em.subject, "timesheet", "", f"Oncore timesheet confirmation{period}",
+                "phone tick" if self.assistant_live else "[not live] phone tick", em.link,
+            ])
+            return
+
+        # SEEK job alerts go to the Career Counsellor, never to unsubscribe
+        if self.career and em.from_domain.endswith("seek.com.au") and "job" in em.subject.lower():
+            try:
+                result = self.career.handle_alert(em)
+            except Exception as exc:
+                log.exception("Career Counsellor failed: %s", exc)
+                result = f"Career Counsellor failed: {str(exc)[:150]}"
+            self.box.add_labels(em.uid, [LABEL_DONE, LABEL_JOBS])
+            actions.sheet_log(self.cfg, "Triage log", [
+                now, em.from_name, em.from_addr, em.subject, "job alert", "", "Sent to Career Counsellor", result, em.link,
+            ])
+            return
 
         t = self.claude.triage(em)
         log.info("%s | %s | kind=%s bill=%s urgent=%s reply=%s",
@@ -186,7 +230,6 @@ class Triage:
 
         labels = [LABEL_DONE]
         done: list[str] = []
-        now = datetime.now(TZ).strftime("%Y-%m-%d %H:%M")
 
         # 1. junk
         if t["kind"] == "spam":
@@ -202,7 +245,11 @@ class Triage:
         if t["kind"] == "marketing":
             labels.append(LABEL_MARKETING)
             url, why = one_click_unsubscribe_url(em)
-            if url and self.cfg["auto_unsubscribe"]:
+            protected = any(em.from_domain == d or em.from_domain.endswith("." + d)
+                            for d in (x.lower().strip() for x in self.cfg.get("never_unsubscribe", [])) if d)
+            if protected:
+                action = "Not unsubscribed: sender is on your keep list"
+            elif url and self.cfg["auto_unsubscribe"]:
                 ok, info = actions.one_click_unsubscribe(url, self.dry)
                 if ok:
                     labels.append(LABEL_UNSUB)
@@ -274,6 +321,16 @@ class Triage:
 
 # ---------------------------------------------------------------- main loop
 
+def career_worker(career: Career) -> None:
+    """Handles Interested / Not for me button presses."""
+    while True:
+        action = career_actions.get()
+        try:
+            career.handle_action(action)
+        except Exception as exc:
+            log.exception("Career action %s failed: %s", action, exc)
+
+
 def main() -> None:
     cfg = load_config()
     logging.basicConfig(
@@ -286,6 +343,8 @@ def main() -> None:
     supervisor_token()  # load it early so notifications can use it too
     triage = Triage(cfg)
     threading.Thread(target=listen_for_mail_events, daemon=True).start()
+    if triage.career:
+        threading.Thread(target=career_worker, args=(triage.career,), daemon=True).start()
 
     sweep = cfg.get("sweep_minutes", 10) * 60
     wake.put("startup")

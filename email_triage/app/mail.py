@@ -25,6 +25,7 @@ log = logging.getLogger("mail")
 IMAP_HOST = "imap.gmail.com"
 MAX_BODY_CHARS = 12000
 MAX_PDF_CHARS = 6000
+MAX_HTML_CHARS = 25000
 
 
 @dataclass
@@ -49,6 +50,7 @@ class Email:
     attachments: list = field(default_factory=list)
     gmail_labels: str = ""
     raw_references: str = ""
+    html_text: str = ""  # HTML part as text with link targets kept, for job alerts
 
     @property
     def from_domain(self) -> str:
@@ -158,6 +160,7 @@ def parse_message(uid: int, raw: bytes, gmail_labels: str = "") -> Email:
         attachments=attachments,
         gmail_labels=gmail_labels,
         raw_references=str(msg.get("References", "")),
+        html_text=_html_to_text(html)[:MAX_HTML_CHARS] if html else "",
     )
 
 
