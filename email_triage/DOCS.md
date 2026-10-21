@@ -5,8 +5,9 @@ Reads each new email in your Gmail inbox the moment it arrives and handles it wi
 | Email type | What happens |
 |---|---|
 | Spam / scams | Moved to Spam and logged. Nothing in it is ever clicked. |
-| Marketing from real companies | Unsubscribed using Gmail's one-click standard, only when Gmail verified the sender. Logged with a link back to the email. Otherwise logged as "check manually". |
-| Urgent | Push notification to your phone with the subject and why it matters. |
+| Marketing from real companies | Unsubscribed using Gmail's one-click standard, only when Gmail verified the sender, then archived (label `AI/Unsubscribed`, still in All Mail). Anything else from that sender in the next 14 days is archived too, while the unsubscribe takes effect. Otherwise logged as "check manually". |
+| Urgent | Push notification to your phone with the subject and why it matters. Password resets, sign-in codes and passkey/2FA changes always count. Reminders for appointments more than a day away don't. Google "app granted access" alerts for apps on your `known_google_apps` list don't. |
+| Orders and parcels | Card on the Todoist **Deliveries** board, moved between columns as emails arrive (Ordered → On it's way → Arrived, or Follow-ups / Returns, Cancelled / Returned). Each email is added as a comment on the card. |
 | Bills | Todoist task in **Bills**: amount, due date, payment link, BPAY or BSB/account, link to the email. If a regular biller's bank details change, the task and a phone alert are flagged ⚠️. |
 | SEEK job alerts | Sent to the **Career Counsellor** (below). Never unsubscribed. |
 | Oncore "Timesheet Received" | ✅ phone tick and a log entry. |
@@ -45,7 +46,7 @@ Home Assistant's IMAP integration fires an `imap_content` event when mail arrive
 | `reasoning_model` | Model used only for bills and draft replies. |
 | `todoist_api_token` | Todoist › Settings › Integrations › Developer (web only). |
 | `todoist_bills_project_id` | The Bills project (already filled in). |
-| `notify_service` | Which phone gets alerts, e.g. `mobile_app_ecto_9`. |
+| `notify_service` | Which phone gets alerts: `mobile_app_ecto_8` (the Fold). |
 | `sheet_webhook_url` / `sheet_webhook_secret` | From the sheet logger Apps Script. |
 | `auto_unsubscribe` | Turn off to log marketing without unsubscribing. |
 | `create_drafts` | Turn off to stop draft replies. |
@@ -54,6 +55,11 @@ Home Assistant's IMAP integration fires an `imap_content` event when mail arrive
 | `career_enabled` | Turn the Career Counsellor on or off. |
 | `todoist_career_project_id` | Where application to-dos go (General To Do). |
 | `career_reminder_time` | Time of the next-day application reminder (24h, Perth). |
+| `known_google_apps` | Names of your own Apps Script projects. Google "granted access" alerts for these don't buzz your phone. Add a name whenever you authorise a new script. |
+| `archive_after_unsubscribe_days` | Archive unsubscribed mail, and stragglers from that sender for this many days. 0 turns archiving off. |
+| `deliveries_enabled` / `todoist_deliveries_project_id` | The Deliveries board. Runs with `assistant_live`, like the Career Counsellor. |
+
+To re-send Career Counsellor prompts you haven't answered yet, fire the Home Assistant event `email_triage_command` with data `command: reask_jobs` (Developer tools › Events).
 
 ## Costs
 

@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.3.0
+- Alerts now go to the Fold (`mobile_app_ecto_8`); they were going to the tablet.
+- Every phone notification sent is now logged.
+- Urgency: password resets, sign-in codes and passkey/2FA changes are always urgent; appointment reminders more than a day away aren't; Google "granted access" alerts for your own scripts (`known_google_apps`) aren't.
+- Unsubscribed mail is archived, plus stragglers from the same sender for 14 days.
+- New Deliveries board: order and parcel emails create and move cards in Todoist › Deliveries.
+- New `email_triage_command` event (`reask_jobs`) re-sends unanswered job prompts.
+- A model that rejects forced tool use is remembered across restarts, so no wasted call each time.
+
 ## 0.2.0
 - Career Counsellor: SEEK job alerts are scored against your Job Search Criteria and Career Dossier. Good fits arrive on your phone with Interested / Not for me buttons. Interested drafts a cover letter in Drive (04 Career / Career Counsellor), adds a to-do to General To Do and a calendar reminder for the next day. Every role is logged on the "Job matches" tab.
 - Oncore "Timesheet Received" emails send a ✅ phone tick and are logged.

@@ -255,6 +255,15 @@ class Career:
             ])
         return f"job alert: {len(new_jobs)} new ({counts['strong']} strong, {counts['possible']} possible)"
 
+    def reask_pending(self) -> int:
+        """Send the phone prompt again for every role still waiting on an answer."""
+        with self.lock:
+            pending = [r for r in self._load().values() if r.get("status") == "asked"]
+        for rec in sorted(pending, key=lambda r: (r.get("fit") != "strong", r.get("seen", ""))):
+            self.ask(rec)
+        log.info("Re-sent %s job prompt(s)", len(pending))
+        return len(pending)
+
     def ask(self, rec: dict) -> None:
         short = hashlib.sha1(rec["key"].encode()).hexdigest()[:10]
         rec["short"] = short

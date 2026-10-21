@@ -3,6 +3,7 @@
 Everything that touches the mailbox lives here. The agent only ever:
   - reads messages (BODY.PEEK, so nothing is marked as read),
   - adds Gmail labels,
+  - archives a message (removes the Inbox label; it stays in All Mail),
   - moves a message to Spam,
   - appends a draft to Drafts.
 It never sends, deletes or expunges anything.
@@ -290,6 +291,17 @@ class Mailbox:
         typ, data = self.conn.uid("STORE", str(uid), "+X-GM-LABELS", f"({quoted})")
         if typ != "OK":
             log.warning("Labelling UID %s failed: %s", uid, data)
+
+    def archive(self, uid: int):
+        """Gmail archive: drop the Inbox label. Nothing is deleted."""
+        if self.dry_run:
+            log.info("[dry run] would archive UID %s", uid)
+            return
+        self.connect()
+        self.conn.select("INBOX")
+        typ, data = self.conn.uid("STORE", str(uid), "-X-GM-LABELS", "(\\Inbox)")
+        if typ != "OK":
+            log.warning("Archiving UID %s failed: %s", uid, data)
 
     def move_to_spam(self, uid: int):
         if self.dry_run:

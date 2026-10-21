@@ -23,6 +23,7 @@ import websocket
 
 import actions
 from career import Career
+from deliveries import Deliveries
 from llm import Claude
 from mail import Email, Mailbox, one_click_unsubscribe_url
 
@@ -109,6 +110,7 @@ def listen_for_mail_events() -> None:
                 raise RuntimeError(f"HA auth failed: {auth}")
             ws.send(json.dumps({"id": 1, "type": "subscribe_events", "event_type": "imap_content"}))
             ws.send(json.dumps({"id": 2, "type": "subscribe_events", "event_type": "mobile_app_notification_action"}))
+            ws.send(json.dumps({"id": 3, "type": "subscribe_events", "event_type": "email_triage_command"}))
             ws.settimeout(None)
             log.info("Listening for new-mail events from Home Assistant")
             while True:
@@ -122,6 +124,12 @@ def listen_for_mail_events() -> None:
                     if action.startswith("CAREER_"):
                         log.info("Button pressed: %s", action)
                         career_actions.put(action)
+                    continue
+                if event.get("event_type") == "email_triage_command":
+                    cmd = str(data.get("command", ""))
+                    log.info("Command received: %s", cmd)
+                    if cmd == "reask_jobs":
+                        career_actions.put("REASK")
                     continue
                 log.debug("imap_content: %s | %s", data.get("sender"), data.get("subject"))
                 wake.put("event")
@@ -139,8 +147,48 @@ class Triage:
         self.box = Mailbox(cfg["gmail_address"], cfg["gmail_app_password"], self.dry)
         self.claude = Claude(cfg["anthropic_api_key"], cfg["triage_model"], cfg["reasoning_model"])
         self.career = Career(cfg, self.claude) if cfg.get("career_enabled", True) else None
+        self.deliveries = (Deliveries(cfg, self.claude)
+                           if cfg.get("deliveries_enabled", True) and cfg.get("todoist_deliveries_project_id")
+                           and cfg.get("todoist_api_token") else None)
         self.assistant_live = cfg.get("assistant_live", True)
+        self.known_apps = [a.strip().lower() for a in cfg.get("known_google_apps", []) if a and a.strip()]
+        self.archive_days = int(cfg.get("archive_after_unsubscribe_days", 14) or 0)
         self.state = load_state()
+
+    # ---------------------------------------------------------- small rules
+    def own_google_app(self, em: Email) -> str | None:
+        """Google 'app granted access' alerts for Brad's own Apps Script projects."""
+        if not (em.from_domain == "google.com" or em.from_domain.endswith(".google.com")):
+            return None
+        if "security alert" not in em.subject.lower() and "access to your google account" not in em.body.lower():
+            return None
+        body = em.body.lower()
+        return next((a for a in self.known_apps if a in body), None)
+
+    def recently_unsubscribed(self, addr: str) -> str | None:
+        """Date Brad was unsubscribed from this sender, if within the archive window."""
+        when = self.state.get("unsubscribed", {}).get(addr)
+        if not when or self.archive_days <= 0:
+            return None
+        try:
+            age = datetime.now(TZ) - datetime.fromisoformat(when)
+        except ValueError:
+            return None
+        return when[:10] if age.days < self.archive_days else None
+
+    def remember_unsubscribe(self, addr: str) -> None:
+        if self.dry:
+            return
+        unsub = self.state.setdefault("unsubscribed", {})
+        unsub[addr] = datetime.now(TZ).isoformat()
+        cutoff = datetime.now(TZ).timestamp() - 90 * 86400
+        for a, w in list(unsub.items()):
+            try:
+                if datetime.fromisoformat(w).timestamp() < cutoff:
+                    del unsub[a]
+            except ValueError:
+                del unsub[a]
+        save_state(self.state)
 
     def tag(self, text: str) -> str:
         return f"[dry run] {text}" if self.dry else text
@@ -225,11 +273,19 @@ class Triage:
             return
 
         t = self.claude.triage(em)
-        log.info("%s | %s | kind=%s bill=%s urgent=%s reply=%s",
-                 em.from_addr, em.subject[:60], t["kind"], t["is_bill"], t["is_urgent"], t["reply_warranted"])
+        t.setdefault("delivery_stage", "none")
+        log.info("%s | %s | kind=%s bill=%s urgent=%s reply=%s delivery=%s",
+                 em.from_addr, em.subject[:60], t["kind"], t["is_bill"], t["is_urgent"], t["reply_warranted"],
+                 t["delivery_stage"])
 
         labels = [LABEL_DONE]
         done: list[str] = []
+
+        # Brad's own Apps Script projects trigger Google "granted access" alerts: not urgent
+        own_app = self.own_google_app(em)
+        if own_app and t["is_urgent"]:
+            t["is_urgent"] = False
+            done.append(f"not alerted: '{own_app}' is on your known apps list")
 
         # 1. junk
         if t["kind"] == "spam":
@@ -247,13 +303,22 @@ class Triage:
             url, why = one_click_unsubscribe_url(em)
             protected = any(em.from_domain == d or em.from_domain.endswith("." + d)
                             for d in (x.lower().strip() for x in self.cfg.get("never_unsubscribe", [])) if d)
+            archive = False
+            already = None if protected else self.recently_unsubscribed(em.from_addr)
             if protected:
                 action = "Not unsubscribed: sender is on your keep list"
+            elif already:
+                # unsubscribes can take a few days to stick; tidy away stragglers meanwhile
+                labels.append(LABEL_UNSUB)
+                archive = True
+                action = f"Archived: already unsubscribed on {already}"
             elif url and self.cfg["auto_unsubscribe"]:
                 ok, info = actions.one_click_unsubscribe(url, self.dry)
                 if ok:
                     labels.append(LABEL_UNSUB)
-                    action = "Unsubscribed (one-click)"
+                    self.remember_unsubscribe(em.from_addr)
+                    archive = self.archive_days > 0
+                    action = "Unsubscribed (one-click)" + (" and archived" if archive else "")
                 else:
                     action = f"Unsubscribe failed ({info}) - check manually"
             elif url:
@@ -264,6 +329,11 @@ class Triage:
             actions.sheet_log(self.cfg, "Unsubscribes", [
                 now, em.from_name, em.from_addr, em.subject, self.tag(action), em.link, t["summary"],
             ])
+            if archive:
+                self.box.add_labels(em.uid, labels)
+                self.box.archive(em.uid)
+                self.log_row(now, em, t, done)
+                return
 
         # 2. urgent alert
         if t["is_urgent"] and t["kind"] != "marketing":
@@ -299,7 +369,17 @@ class Triage:
                         self.dry,
                     )
 
-        # 4. draft reply
+        # 4. deliveries board
+        if self.deliveries and t["kind"] == "normal" and t["delivery_stage"] != "none":
+            try:
+                result = self.deliveries.handle(em, t["delivery_stage"])
+            except Exception as exc:
+                log.exception("Deliveries update failed: %s", exc)
+                result = f"Deliveries update FAILED ({str(exc)[:80]})"
+            if result:
+                done.append(result)
+
+        # 5. draft reply
         if t["reply_warranted"] and t["kind"] == "normal" and self.cfg["create_drafts"]:
             d = self.claude.draft_reply(em)
             if d.get("should_draft") and d.get("body", "").strip():
@@ -326,6 +406,9 @@ def career_worker(career: Career) -> None:
     while True:
         action = career_actions.get()
         try:
+            if action == "REASK":
+                career.reask_pending()
+                continue
             career.handle_action(action)
         except Exception as exc:
             log.exception("Career action %s failed: %s", action, exc)

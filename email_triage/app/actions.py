@@ -51,7 +51,9 @@ def notify(service: str, title: str, message: str, url: str | None, dry_run: boo
         timeout=20,
     )
     if r.status_code >= 300:
-        log.warning("Notification failed (%s): %s", r.status_code, r.text[:200])
+        log.warning("Notification to %s failed (%s): %s", service, r.status_code, r.text[:200])
+    else:
+        log.info("Notified %s: %s", service, title[:80])
 
 
 # ---------------------------------------------------------------- Google Sheet log
@@ -218,6 +220,57 @@ def add_todoist_task(cfg: dict, title: str, description: str, due_date: str | No
         log.warning("Todoist task failed (%s): %s", r.status_code, r.text[:300])
         return None
     return r.json().get("id")
+
+
+# ---------------------------------------------------------------- Todoist (deliveries)
+
+TODOIST = "https://api.todoist.com/api/v1"
+
+
+def _todoist(cfg: dict, method: str, path: str, **kw):
+    r = requests.request(method, f"{TODOIST}{path}", headers={"Authorization": f"Bearer {cfg['todoist_api_token']}"},
+                         timeout=20, **kw)
+    if r.status_code >= 300:
+        raise RuntimeError(f"Todoist {method} {path} failed ({r.status_code}): {r.text[:200]}")
+    return r.json() if r.content else {}
+
+
+def todoist_sections(cfg: dict, project_id: str) -> dict[str, str]:
+    """Section name (lower-case, apostrophes dropped) -> id."""
+    data = _todoist(cfg, "GET", "/sections", params={"project_id": project_id, "limit": 200})
+    items = data.get("results", data) if isinstance(data, dict) else data
+    return {re.sub(r"['’]", "", s["name"]).strip().lower(): s["id"] for s in items}
+
+
+def todoist_create(cfg: dict, content: str, description: str, project_id: str, section_id: str | None,
+                   due_date: str | None = None) -> str:
+    payload = {"content": content, "description": description, "project_id": project_id}
+    if section_id:
+        payload["section_id"] = section_id
+    if due_date and re.fullmatch(r"\d{4}-\d{2}-\d{2}", due_date):
+        payload["due_date"] = due_date
+    return _todoist(cfg, "POST", "/tasks", json=payload)["id"]
+
+
+def todoist_update(cfg: dict, task_id: str, **fields) -> None:
+    _todoist(cfg, "POST", f"/tasks/{task_id}", json=fields)
+
+
+def todoist_move(cfg: dict, task_id: str, section_id: str) -> None:
+    _todoist(cfg, "POST", f"/tasks/{task_id}/move", json={"section_id": section_id})
+
+
+def todoist_comment(cfg: dict, task_id: str, content: str) -> None:
+    _todoist(cfg, "POST", "/comments", json={"task_id": task_id, "content": content})
+
+
+def todoist_task_open(cfg: dict, task_id: str) -> bool:
+    """False if the task was completed or deleted (e.g. Brad ticked it off)."""
+    try:
+        t = _todoist(cfg, "GET", f"/tasks/{task_id}")
+    except RuntimeError:
+        return False
+    return not t.get("checked") and not t.get("is_deleted")
 
 
 # ---------------------------------------------------------------- drafts
