@@ -282,6 +282,7 @@ class Career:
                 ],
             },
             channel="Job matches",
+            style="job",
         )
 
     # ---------------------------------------------------------- button presses
@@ -319,7 +320,8 @@ class Career:
             doc_url = ""
             status = f"Interested: drafting FAILED ({str(exc)[:80]})"
             actions.notify(self.cfg["notify_service"], "Cover letter didn't work",
-                           f"{rec['title']} - {rec['company']}: {str(exc)[:150]}", rec.get("url"), not self.live)
+                           f"{rec['title']} - {rec['company']}: {str(exc)[:150]}", rec.get("url"), not self.live,
+                           channel="Job matches", style="problem")
         with self.lock:
             store = self._load()
             rec["status"] = "drafted" if doc_url else "failed"
@@ -384,6 +386,6 @@ class Career:
         actions.notify(
             self.cfg["notify_service"], "📝 Cover letter ready",
             f"{rec['title']} - {rec['company']}. Draft in Drive, to-do added, reminder set for tomorrow.",
-            doc_url, False, channel="Job matches",
+            doc_url, False, channel="Job matches", style="letter",
         )
         return doc_url

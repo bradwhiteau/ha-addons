@@ -251,7 +251,7 @@ class Triage:
             period = f" for the week ending {m.group(1)}" if m else ""
             actions.notify(self.cfg["notify_service"], "✅ Timesheet received",
                            f"Oncore confirmed it received your timesheet{period}.", em.link,
-                           not self.assistant_live, channel="Timesheets")
+                           not self.assistant_live, channel="Timesheets", style="timesheet")
             self.box.add_labels(em.uid, [LABEL_DONE, LABEL_TIMESHEET])
             actions.sheet_log(self.cfg, "Triage log", [
                 now, em.from_name, em.from_addr, em.subject, "timesheet", "", f"Oncore timesheet confirmation{period}",
@@ -344,6 +344,7 @@ class Triage:
                 f"{em.subject}\n{t.get('urgent_reason') or t['summary']}",
                 em.link,
                 self.dry,
+                style="urgent",
             )
             done.append("phone alert")
 
@@ -367,6 +368,7 @@ class Triage:
                         f"{bill.get('biller')}: {', '.join(changed)} differ from last time. Verify before paying.",
                         em.link,
                         self.dry,
+                        style="bank",
                     )
 
         # 4. deliveries board

@@ -28,8 +28,21 @@ def _now() -> str:
 
 # ---------------------------------------------------------------- Home Assistant
 
+# How each kind of alert looks on the phone (Android companion app):
+# small icon, accent colour, and a group so related alerts stack together.
+STYLES = {
+    "urgent":    {"notification_icon": "mdi:email-alert",          "color": "#E53935", "group": "Urgent email"},
+    "bank":      {"notification_icon": "mdi:alert-octagon",        "color": "#FB8C00", "group": "Bills"},
+    "timesheet": {"notification_icon": "mdi:check-circle",         "color": "#43A047", "group": "Timesheets"},
+    "job":       {"notification_icon": "mdi:briefcase-search",     "color": "#1E88E5", "group": "Job matches"},
+    "letter":    {"notification_icon": "mdi:file-document-edit",   "color": "#1E88E5", "group": "Job matches"},
+    "problem":   {"notification_icon": "mdi:alert-circle",         "color": "#FB8C00", "group": "Email triage"},
+    "delivery":  {"notification_icon": "mdi:package-variant",      "color": "#8E24AA", "group": "Deliveries"},
+}
+
+
 def notify(service: str, title: str, message: str, url: str | None, dry_run: bool,
-           extra: dict | None = None, channel: str = "Email triage") -> None:
+           extra: dict | None = None, channel: str = "Email triage", style: str | None = None) -> None:
     if dry_run:
         log.info("[dry run] would notify %s: %s | %s", service, title, message)
         return
@@ -38,7 +51,7 @@ def notify(service: str, title: str, message: str, url: str | None, dry_run: boo
         log.warning("No SUPERVISOR_TOKEN; cannot send notification")
         return
     data = {"title": title[:80], "message": message[:400]}
-    payload = {"channel": channel, "importance": "high"}
+    payload = {"channel": channel, "importance": "high", **STYLES.get(style or "", {})}
     if url:
         payload.update({"clickAction": url, "url": url})
     if extra:

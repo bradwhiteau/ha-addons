@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.3.1
+- Phone notifications are styled by type: their own icon and colour, and grouped so related alerts stack (urgent email red, job matches blue, timesheet tick green, bank-detail warnings orange).
+
 ## 0.3.0
 - Alerts now go to the Fold (`mobile_app_ecto_8`); they were going to the tablet.
 - Every phone notification sent is now logged.
