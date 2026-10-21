@@ -59,7 +59,7 @@ Home Assistant's IMAP integration fires an `imap_content` event when mail arrive
 | `archive_after_unsubscribe_days` | Archive unsubscribed mail, and stragglers from that sender for this many days. 0 turns archiving off. |
 | `deliveries_enabled` / `todoist_deliveries_project_id` | The Deliveries board. Runs with `assistant_live`, like the Career Counsellor. |
 
-To re-send Career Counsellor prompts you haven't answered yet, fire the Home Assistant event `email_triage_command` with data `command: reask_jobs` (Developer tools › Events).
+To re-send Career Counsellor prompts you haven't answered yet, fire the Home Assistant event `email_triage_command` with data `command: reask_jobs` (Developer tools › Events). Use `command: retry_failed` to redo cover letters that failed after you tapped Interested.
 
 ## Costs
 

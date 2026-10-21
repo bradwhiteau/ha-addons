@@ -130,6 +130,8 @@ def listen_for_mail_events() -> None:
                     log.info("Command received: %s", cmd)
                     if cmd == "reask_jobs":
                         career_actions.put("REASK")
+                    elif cmd == "retry_failed":
+                        career_actions.put("RETRY")
                     continue
                 log.debug("imap_content: %s | %s", data.get("sender"), data.get("subject"))
                 wake.put("event")
@@ -410,6 +412,9 @@ def career_worker(career: Career) -> None:
         try:
             if action == "REASK":
                 career.reask_pending()
+                continue
+            if action == "RETRY":
+                career.retry_failed()
                 continue
             career.handle_action(action)
         except Exception as exc:

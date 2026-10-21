@@ -264,6 +264,15 @@ class Career:
         log.info("Re-sent %s job prompt(s)", len(pending))
         return len(pending)
 
+    def retry_failed(self) -> int:
+        """Redo the cover letter for every 'Interested' role whose drafting failed."""
+        with self.lock:
+            failed = [r for r in self._load().values() if r.get("status") == "failed" and r.get("short")]
+        for rec in failed:
+            self.handle_action(f"CAREER_YES_{rec['short']}")
+        log.info("Retried %s failed application(s)", len(failed))
+        return len(failed)
+
     def ask(self, rec: dict) -> None:
         short = hashlib.sha1(rec["key"].encode()).hexdigest()[:10]
         rec["short"] = short
@@ -297,7 +306,7 @@ class Career:
             if rec is None:
                 log.info("Button press for an unknown job (%s)", short)
                 return
-            if rec.get("status") not in ("asked",):
+            if rec.get("status") not in ("asked", "failed"):
                 log.info("Ignoring repeat button press for %s (%s)", rec["title"], rec.get("status"))
                 return
             rec["status"] = "working" if choice == "YES" else "declined"

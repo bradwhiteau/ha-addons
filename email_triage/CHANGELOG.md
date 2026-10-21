@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.3.2
+- New `email_triage_command` option `retry_failed`: redoes cover letters that failed after you tapped Interested.
+
 ## 0.3.1
 - Phone notifications are styled by type: their own icon and colour, and grouped so related alerts stack (urgent email red, job matches blue, timesheet tick green, bank-detail warnings orange).
 
