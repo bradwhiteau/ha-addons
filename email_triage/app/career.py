@@ -370,6 +370,9 @@ class Career:
 
         doc = actions.gscript(self.cfg, "create_doc", title=title, body=out["letter"])
         doc_url = doc["url"]
+        moved = doc.get("moved", True)
+        if not moved:
+            log.warning("Cover letter saved but not moved to the Career Counsellor folder: %s", doc.get("note", ""))
 
         tomorrow = (datetime.now(TZ) + timedelta(days=1)).date()
         hh, mm = (self.cfg.get("career_reminder_time") or "15:00").split(":")
@@ -394,7 +397,9 @@ class Career:
             log.warning("Calendar reminder failed: %s", exc)
         actions.notify(
             self.cfg["notify_service"], "📝 Cover letter ready",
-            f"{rec['title']} - {rec['company']}. Draft in Drive, to-do added, reminder set for tomorrow.",
+            f"{rec['title']} - {rec['company']}. Draft in Drive"
+            + ("" if moved else " (My Drive, not the Career folder yet)")
+            + ", to-do added, reminder set for tomorrow.",
             doc_url, False, channel="Job matches", style="letter",
         )
         return doc_url

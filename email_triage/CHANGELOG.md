@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.3.3
+- If the Apps Script can't move a cover letter into the Career Counsellor folder, the to-do and reminder are still created and the reason is logged.
+
 ## 0.3.2
 - New `email_triage_command` option `retry_failed`: redoes cover letters that failed after you tapped Interested.
 
