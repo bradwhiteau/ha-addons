@@ -82,6 +82,20 @@ TRIAGE_TOOL = {
                     "receipts, and food delivery."
                 ),
             },
+            "subscription_event": {
+                "type": "string",
+                "enum": ["none", "started", "charged", "renewal_upcoming", "price_change", "trial_ending",
+                         "payment_failed", "cancelled"],
+                "description": (
+                    "If this is from a recurring paid service Brad subscribes to (streaming, music, software, apps, "
+                    "cloud storage, password managers, VPNs, games, memberships, Patreon or other recurring "
+                    "donations), what it reports: started (new subscription, free trial or resubscription), "
+                    "charged (receipt or invoice for a payment taken), renewal_upcoming (will renew soon), "
+                    "price_change, trial_ending, payment_failed, cancelled. 'none' for everything else, including "
+                    "marketing and upsells, one-off purchases, and utilities, phone, internet, insurance, rent "
+                    "or loan bills."
+                ),
+            },
             "urgent_reason": {"type": "string", "description": "If urgent: one short phone-sized line on why and what's needed. Otherwise empty."},
             "reply_warranted": {
                 "type": "boolean",
@@ -89,7 +103,7 @@ TRIAGE_TOOL = {
             },
             "summary": {"type": "string", "description": "One sentence, under 25 words, saying what the email is."},
         },
-        "required": ["kind", "is_bill", "is_urgent", "urgent_reason", "reply_warranted", "summary", "delivery_stage"],
+        "required": ["kind", "is_bill", "is_urgent", "urgent_reason", "reply_warranted", "summary", "delivery_stage", "subscription_event"],
     },
 }
 
@@ -116,6 +130,31 @@ DELIVERY_TOOL = {
             "update": {"type": "string", "description": "One short line on what this email says happened."},
         },
         "required": ["matches", "retailer", "item", "update"],
+    },
+}
+
+SUBSCRIPTION_TOOL = {
+    "name": "record_subscription",
+    "description": "Record the details of this subscription email, and which listed subscription (if any) it is about.",
+    "input_schema": {
+        "type": "object",
+        "properties": {
+            "matches": {
+                "type": ["integer", "null"],
+                "description": (
+                    "The number of the listed subscription this email is about, matched on the service (and, for "
+                    "Patreon or similar, the creator). null if it isn't on the list or you aren't sure."
+                ),
+            },
+            "service": {"type": "string", "description": "Short service name, e.g. 'Netflix', 'Patreon (Philly D)'."},
+            "amount": {"type": ["number", "null"], "description": "Amount charged or to be charged per period, exactly as stated."},
+            "currency": {"type": ["string", "null"], "description": "Three-letter code, e.g. AUD or USD, if stated or clear."},
+            "frequency": {"type": ["string", "null"], "enum": ["weekly", "monthly", "quarterly", "annual", None]},
+            "next_date": {"type": ["string", "null"], "description": "Next renewal, charge or trial-end date as YYYY-MM-DD, or null."},
+            "payment_method": {"type": ["string", "null"], "description": "e.g. 'PayPal', 'Visa ending 1234'. Never a full card number."},
+            "update": {"type": "string", "description": "One short line on what this email says happened."},
+        },
+        "required": ["matches", "service", "update"],
     },
 }
 
@@ -268,3 +307,19 @@ class Claude:
             + "\n\nRecord this delivery update."
         )
         return self._call(self.triage_model, system, user, DELIVERY_TOOL, 800)
+
+    def extract_subscription(self, em: Email, event: str, listed: list[dict]) -> dict:
+        now = datetime.now(TZ).strftime("%d %B %Y")
+        system = (
+            f"You keep Brad White's list of subscriptions up to date. He lives in Perth, Western Australia. "
+            f"Today is {now}. {SAFETY} Copy amounts and dates exactly; use null if not stated. "
+            "Match to a listed subscription only when it is clearly the same service; if unsure, use null."
+        )
+        listing = "\n".join(
+            f"{i}. {d['content']} | section {d.get('section') or '-'}" for i, d in enumerate(listed)
+        ) or "(none)"
+        user = (
+            f"<subscriptions>\n{listing}\n</subscriptions>\n\n" + _render(em, include_attachments=False)
+            + f"\n\nThis email was classified as: {event}. Record the subscription details."
+        )
+        return self._call(self.triage_model, system, user, SUBSCRIPTION_TOOL, 800)

@@ -38,6 +38,7 @@ STYLES = {
     "letter":    {"notification_icon": "mdi:file-document-edit",   "color": "#1E88E5", "group": "Job matches"},
     "problem":   {"notification_icon": "mdi:alert-circle",         "color": "#FB8C00", "group": "Email triage"},
     "delivery":  {"notification_icon": "mdi:package-variant",      "color": "#8E24AA", "group": "Deliveries"},
+    "subscription": {"notification_icon": "mdi:credit-card-refresh", "color": "#FB8C00", "group": "Subscriptions"},
 }
 
 
@@ -235,7 +236,7 @@ def add_todoist_task(cfg: dict, title: str, description: str, due_date: str | No
     return r.json().get("id")
 
 
-# ---------------------------------------------------------------- Todoist (deliveries)
+# ---------------------------------------------------------------- Todoist (deliveries, subscriptions)
 
 TODOIST = "https://api.todoist.com/api/v1"
 
@@ -263,6 +264,10 @@ def todoist_create(cfg: dict, content: str, description: str, project_id: str, s
     if due_date and re.fullmatch(r"\d{4}-\d{2}-\d{2}", due_date):
         payload["due_date"] = due_date
     return _todoist(cfg, "POST", "/tasks", json=payload)["id"]
+
+
+def todoist_add_section(cfg: dict, project_id: str, name: str) -> str:
+    return _todoist(cfg, "POST", "/sections", json={"project_id": project_id, "name": name})["id"]
 
 
 def todoist_update(cfg: dict, task_id: str, **fields) -> None:

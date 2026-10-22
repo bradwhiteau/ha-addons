@@ -25,6 +25,7 @@ import actions
 from career import Career
 from deliveries import Deliveries
 from llm import Claude
+from subscriptions import Subscriptions
 from mail import Email, Mailbox, one_click_unsubscribe_url
 
 OPTIONS_FILE = "/data/options.json"
@@ -42,6 +43,7 @@ LABEL_DRAFT_READY = "AI/Draft ready"
 LABEL_DRAFT = "AI draft"
 LABEL_JOBS = "AI/Job alert"
 LABEL_TIMESHEET = "AI/Timesheet confirmed"
+LABEL_SUBSCRIPTION = "AI/Subscription"
 
 log = logging.getLogger("triage")
 wake = queue.Queue()
@@ -152,6 +154,9 @@ class Triage:
         self.deliveries = (Deliveries(cfg, self.claude)
                            if cfg.get("deliveries_enabled", True) and cfg.get("todoist_deliveries_project_id")
                            and cfg.get("todoist_api_token") else None)
+        self.subscriptions = (Subscriptions(cfg, self.claude)
+                              if cfg.get("subscriptions_enabled", True) and cfg.get("todoist_subscriptions_project_id")
+                              and cfg.get("todoist_api_token") else None)
         self.assistant_live = cfg.get("assistant_live", True)
         self.known_apps = [a.strip().lower() for a in cfg.get("known_google_apps", []) if a and a.strip()]
         self.archive_days = int(cfg.get("archive_after_unsubscribe_days", 14) or 0)
@@ -276,9 +281,10 @@ class Triage:
 
         t = self.claude.triage(em)
         t.setdefault("delivery_stage", "none")
-        log.info("%s | %s | kind=%s bill=%s urgent=%s reply=%s delivery=%s",
+        t.setdefault("subscription_event", "none")
+        log.info("%s | %s | kind=%s bill=%s urgent=%s reply=%s delivery=%s subscription=%s",
                  em.from_addr, em.subject[:60], t["kind"], t["is_bill"], t["is_urgent"], t["reply_warranted"],
-                 t["delivery_stage"])
+                 t["delivery_stage"], t["subscription_event"])
 
         labels = [LABEL_DONE]
         done: list[str] = []
@@ -383,7 +389,18 @@ class Triage:
             if result:
                 done.append(result)
 
-        # 5. draft reply
+        # 5. subscriptions list
+        if self.subscriptions and t["kind"] == "normal" and t["subscription_event"] != "none":
+            labels.append(LABEL_SUBSCRIPTION)
+            try:
+                result = self.subscriptions.handle(em, t["subscription_event"])
+            except Exception as exc:
+                log.exception("Subscriptions update failed: %s", exc)
+                result = f"Subscriptions update FAILED ({str(exc)[:80]})"
+            if result:
+                done.append(result)
+
+        # 6. draft reply
         if t["reply_warranted"] and t["kind"] == "normal" and self.cfg["create_drafts"]:
             d = self.claude.draft_reply(em)
             if d.get("should_draft") and d.get("body", "").strip():

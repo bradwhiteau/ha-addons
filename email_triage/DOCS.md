@@ -8,6 +8,7 @@ Reads each new email in your Gmail inbox the moment it arrives and handles it wi
 | Marketing from real companies | Unsubscribed using Gmail's one-click standard, only when Gmail verified the sender, then archived (label `AI/Unsubscribed`, still in All Mail). Anything else from that sender in the next 14 days is archived too, while the unsubscribe takes effect. Otherwise logged as "check manually". |
 | Urgent | Push notification to your phone with the subject and why it matters. Password resets, sign-in codes and passkey/2FA changes always count. Reminders for appointments more than a day away don't. Google "app granted access" alerts for apps on your `known_google_apps` list don't. |
 | Orders and parcels | Card on the Todoist **Deliveries** board, moved between columns as emails arrive (Ordered → On it's way → Arrived, or Follow-ups / Returns, Cancelled / Returned). Each email is added as a comment on the card. |
+| Subscriptions | Todoist **Subscriptions** list kept up to date (see below). |
 | Bills | Todoist task in **Bills**: amount, due date, payment link, BPAY or BSB/account, link to the email. If a regular biller's bank details change, the task and a phone alert are flagged ⚠️. |
 | SEEK job alerts | Sent to the **Career Counsellor** (below). Never unsubscribed. |
 | Oncore "Timesheet Received" | ✅ phone tick and a log entry. |
@@ -25,6 +26,24 @@ Each SEEK alert is split into roles and scored against two docs in Drive: **Job 
 4. adds a calendar reminder for tomorrow at `career_reminder_time`.
 
 Every role, including the ones it skipped and why, goes on the **Job matches** tab. It never applies for anything.
+
+## Subscriptions
+
+Emails from recurring paid services (streaming, software, apps, storage, memberships, Patreon and other recurring donations) update Todoist › **Subscriptions**. Utility, phone, internet and insurance bills aren't included; they stay with Bills. Each email is matched to an entry by service name and added to it as a comment, so every entry keeps its own history.
+
+| Email says | What happens |
+|---|---|
+| Receipt / payment taken | Comment. If the amount differs from the one in the entry's name (same currency), the name is updated, the old amount kept as "Previous amount", and your phone is alerted. |
+| Price change | As above. |
+| Renewing soon | Comment, and "Next renewal" in the description. |
+| Trial ending | Comment, "Trial ends" in the description, and the entry is due that day. |
+| Payment failed | Comment (and an urgent alert, as before). |
+| Cancelled | Moved to **Cancelled**. |
+| New sign-up | Added under Monthly / Quarterly / Annual (the section is created if needed), or moved back there if it was cancelled. |
+| Charged after cancelling | Moved to **Needs review**, phone alert. |
+| Charge for something not on the list | Added to **Needs review**, phone alert. |
+
+If it isn't sure which entry an email belongs to, it adds a new one to Needs review rather than guessing. Entries are only ever added, commented on, renamed or moved; it never deletes or completes them. Runs with `assistant_live`, like Deliveries.
 
 ## What it will never do
 
@@ -58,6 +77,7 @@ Home Assistant's IMAP integration fires an `imap_content` event when mail arrive
 | `known_google_apps` | Names of your own Apps Script projects. Google "granted access" alerts for these don't buzz your phone. Add a name whenever you authorise a new script. |
 | `archive_after_unsubscribe_days` | Archive unsubscribed mail, and stragglers from that sender for this many days. 0 turns archiving off. |
 | `deliveries_enabled` / `todoist_deliveries_project_id` | The Deliveries board. Runs with `assistant_live`, like the Career Counsellor. |
+| `subscriptions_enabled` / `todoist_subscriptions_project_id` | The Subscriptions list. Runs with `assistant_live`. |
 
 To re-send Career Counsellor prompts you haven't answered yet, fire the Home Assistant event `email_triage_command` with data `command: reask_jobs` (Developer tools › Events). Use `command: retry_failed` to redo cover letters that failed after you tapped Interested.
 

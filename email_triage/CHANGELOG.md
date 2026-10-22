@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.4.0
+- New Subscriptions list: emails from subscription services keep Todoist › Subscriptions up to date. Receipts and renewal notices are added as comments on the matching entry; price changes update the amount and buzz your phone; cancellations move the entry to Cancelled; new sign-ups are added under their billing frequency.
+- Phone alert if a cancelled subscription charges you again, or a charge arrives for something not on the list (both land in Needs review).
+- These emails get the `AI/Subscription` label.
+
 ## 0.3.3
 - If the Apps Script can't move a cover letter into the Career Counsellor folder, the to-do and reminder are still created and the reason is logged.
 
