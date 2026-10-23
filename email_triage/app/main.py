@@ -241,6 +241,14 @@ class Triage:
                 del unsub[a]
         save_state(self.state)
 
+    def archive_handled(self, uid: int, done: list | None = None, why: str = "handled") -> None:
+        """Inbox zero: once the agent has fully dealt with an email, archive it (never deleted)."""
+        if not self.cfg.get("archive_handled", True):
+            return
+        self.box.archive(uid)
+        if done is not None:
+            done.append(f"archived ({why})")
+
     def tag(self, text: str) -> str:
         if self.catchup:
             return f"[catch-up] {text}"
@@ -301,9 +309,11 @@ class Triage:
         # Already handled for real during dry run (assistant_live): just label them
         if self.catchup and em.from_domain.endswith("oncoreservices.com") and "timesheet received" in em.subject.lower():
             self.box.add_labels(em.uid, [LABEL_DONE, LABEL_TIMESHEET])
+            self.archive_handled(em.uid)
             return
         if self.catchup and self.career and em.from_domain.endswith("seek.com.au") and "job" in em.subject.lower():
             self.box.add_labels(em.uid, [LABEL_DONE, LABEL_JOBS])
+            self.archive_handled(em.uid)
             return
 
         # Oncore confirming it received the weekly timesheet
@@ -314,9 +324,13 @@ class Triage:
                            f"Oncore confirmed it received your timesheet{period}.", em.link,
                            not self.assistant_live, channel="Timesheets", style="timesheet")
             self.box.add_labels(em.uid, [LABEL_DONE, LABEL_TIMESHEET])
+            tick = "phone tick" if self.assistant_live else "[not live] phone tick"
+            if self.assistant_live and self.cfg.get("archive_handled", True):
+                self.archive_handled(em.uid)
+                tick += "; archived"
             actions.sheet_log(self.cfg, "Triage log", [
                 now, em.from_name, em.from_addr, em.subject, "timesheet", "", f"Oncore timesheet confirmation{period}",
-                "phone tick" if self.assistant_live else "[not live] phone tick", em.link,
+                tick, em.link,
             ])
             return
 
@@ -328,6 +342,10 @@ class Triage:
                 log.exception("Career Counsellor failed: %s", exc)
                 result = f"Career Counsellor failed: {str(exc)[:150]}"
             self.box.add_labels(em.uid, [LABEL_DONE, LABEL_JOBS])
+            if (self.assistant_live and self.cfg.get("archive_handled", True)
+                    and not str(result).startswith(("Career Counsellor failed", "[not live]"))):
+                self.archive_handled(em.uid)  # every role is on the Job matches tab
+                result = f"{result}; archived"
             actions.sheet_log(self.cfg, "Triage log", [
                 now, em.from_name, em.from_addr, em.subject, "job alert", "", "Sent to Career Counsellor", result, em.link,
             ])
@@ -411,11 +429,13 @@ class Triage:
             done.append("urgent (no phone alert: old email)" if self.catchup else "phone alert")
 
         # 3. bills
+        bill_handled = False
         if t["is_bill"] and t["kind"] == "normal":
             labels.append(LABEL_BILL)
             bill = self.claude.extract_bill(em)
             if bill.get("already_paid_or_autopay"):
                 done.append("bill (already paid / direct debit, no task)")
+                bill_handled = True
             elif not self.cfg.get("todoist_api_token"):
                 done.append("bill (no Todoist token set)")
             else:
@@ -423,6 +443,7 @@ class Triage:
                 title, desc = actions.bill_task_text(em, bill, changed)
                 task = actions.add_todoist_task(self.cfg, title, desc, bill.get("due_date"), bool(changed) or t["is_urgent"], self.dry)
                 done.append(f"Todoist: {title}" if task else "Todoist task FAILED")
+                bill_handled = bool(task) and not changed  # a bank-detail change needs Brad's eyes
                 if changed:
                     self.notify(
                         self.cfg["notify_service"],
@@ -456,6 +477,9 @@ class Triage:
         # 5. subscriptions list
         if self.subscriptions and t["kind"] == "normal" and t["subscription_event"] != "none":
             labels.append(LABEL_SUBSCRIPTION)
+        sub_handled = False
+        if self.subscriptions and t["kind"] == "normal" and t["subscription_event"] != "none":
+            sub_handled = True
         if self.subscriptions and t["kind"] == "normal" and t["subscription_event"] != "none" and not self.catchup:
             try:
                 result = self.subscriptions.handle(em, t["subscription_event"])
@@ -464,6 +488,8 @@ class Triage:
                 result = f"Subscriptions update FAILED ({str(exc)[:80]})"
             if result:
                 done.append(result)
+            sub_handled = (bool(result) and not result.startswith(("Subscriptions update FAILED", "[not live]"))
+                           and not getattr(self.subscriptions, "flagged", False))
 
         # 6. draft reply
         if t["reply_warranted"] and t["kind"] == "normal" and self.cfg["create_drafts"]:
@@ -475,9 +501,12 @@ class Triage:
                     done.append(f"draft saved: {d.get('note_for_brad', '')}")
 
         self.box.add_labels(em.uid, labels)
-        if archive_after:
+        needs_brad = t["is_urgent"] or t["reply_warranted"] or (t["is_bill"] and not bill_handled)
+        if archive_after and self.cfg.get("archive_handled", True):
             self.box.archive(em.uid)
             done.append("archived (on the Deliveries board)")
+        elif not needs_brad and (bill_handled or sub_handled):
+            self.archive_handled(em.uid, done, "on your Todoist list" if bill_handled else "on the Subscriptions list")
         self.log_row(now, em, t, done)
 
     def log_row(self, now: str, em: Email, t: dict, done: list[str]) -> None:

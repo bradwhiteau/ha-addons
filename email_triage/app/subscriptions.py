@@ -110,9 +110,13 @@ class Subscriptions:
 
     # ---------------------------------------------------------- handling
     def alert(self, title: str, message: str, em: Email) -> None:
+        self.flagged = True  # something Brad should look at: keep the email in the inbox
         actions.notify(self.cfg["notify_service"], title, message, em.link, False, style="subscription")
 
+    flagged = False
+
     def handle(self, em: Email, event: str) -> str:
+        self.flagged = False
         if event == "none":
             return ""
         if not self.live:

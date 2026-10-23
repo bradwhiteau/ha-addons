@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.5.0
+- Inbox zero: emails the agent fully handles are archived (never deleted): job alerts once the Career Counsellor has logged them, Oncore timesheet confirmations, bills once the Todoist task exists (or they're autopay), subscription emails once the Subscriptions list is updated, and deliveries.
+- Kept in the inbox: anything urgent, needing a reply, a bill with changed bank details, a subscription that triggered an alert, a delivery problem, or anything that failed.
+- New `archive_handled` setting (on by default) turns this off.
+
 ## 0.4.2
 - Order and parcel emails are archived once they're on the Deliveries board (`archive_deliveries`, on by default). Delivery problems stay in the inbox.
 
