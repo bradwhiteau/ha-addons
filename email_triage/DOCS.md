@@ -20,6 +20,8 @@ Every email it handles gets the `AI/Triaged` label, and every decision is writte
 
 Anything the agent fully deals with is archived: it stays in All Mail and keeps its `AI/...` label, so you can always find it (e.g. search `label:ai-bill`). Archived: job alerts, timesheet ticks, bills with a Todoist task (or autopay), subscription updates and deliveries. Left in your inbox: anything urgent, needing a reply, with changed bank details, that set off a subscription alert, a delivery problem, or anything that failed. Turn it off with `archive_handled`.
 
+Purely informational emails (completed DocuSigns, privacy-policy updates, application confirmations) are covered by `archive_fyi`: `trial` only marks them in the Triage log as "would archive", `on` archives them, `off` leaves them alone. When the agent is unsure, it leaves the email in the inbox.
+
 ## Career Counsellor
 
 Each SEEK alert is split into roles and scored against two docs in Drive: **Job Search Criteria** (04 Career / Career Counsellor, what you want and don't) and your **Master Career Profile & Cover Letter Dossier** (your background and wins). Good fits (up to 5 per alert) come to your phone with **Interested** / **Not for me** buttons. Tap **Interested** and it:

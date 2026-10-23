@@ -102,8 +102,19 @@ TRIAGE_TOOL = {
                 "description": "True if a real person (not an automated or no-reply sender) wrote to Brad and a reply from him is expected.",
             },
             "summary": {"type": "string", "description": "One sentence, under 25 words, saying what the email is."},
+            "fyi_only": {
+                "type": "boolean",
+                "description": (
+                    "True only if this is a purely informational notice Brad doesn't need to read, decide on or do "
+                    "anything about: e.g. a completed DocuSign, a policy or privacy-terms update, an 'application "
+                    "submitted' confirmation, a 'your account was updated' notice for a change he clearly made, a "
+                    "routine digest. False if it asks him to do anything, has a date or deadline he should know about, "
+                    "is from a real person, is about money owed or a security change he may not have made, or is "
+                    "something he'd plausibly want to read soon. When unsure, False."
+                ),
+            },
         },
-        "required": ["kind", "is_bill", "is_urgent", "urgent_reason", "reply_warranted", "summary", "delivery_stage", "subscription_event"],
+        "required": ["kind", "is_bill", "is_urgent", "urgent_reason", "reply_warranted", "summary", "delivery_stage", "subscription_event", "fyi_only"],
     },
 }
 

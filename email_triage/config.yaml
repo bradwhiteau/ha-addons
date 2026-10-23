@@ -1,5 +1,5 @@
 name: Email Triage
-version: "0.5.0"
+version: "0.5.1"
 slug: email_triage
 description: Triages new Gmail with Claude - junk, urgent alerts, bills, deliveries and subscriptions to Todoist, draft replies.
 url: https://github.com/bradwhiteau/ha-addons
@@ -37,6 +37,7 @@ options:
   deliveries_enabled: true
   archive_deliveries: true
   archive_handled: true
+  archive_fyi: trial
   todoist_deliveries_project_id: "6hph6VpVv6MQJ8q2"
   subscriptions_enabled: true
   todoist_subscriptions_project_id: "6hq6Q8MVhXVF6jMq"
@@ -68,6 +69,7 @@ schema:
   deliveries_enabled: bool
   archive_deliveries: bool?
   archive_handled: bool?
+  archive_fyi: list(off|trial|on)?
   todoist_deliveries_project_id: str
   subscriptions_enabled: bool?
   todoist_subscriptions_project_id: str?

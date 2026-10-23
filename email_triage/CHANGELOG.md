@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.5.1
+- New `archive_fyi` (off / trial / on, default trial): purely informational emails that need nothing from you are archived. In trial they're only marked "[trial] would archive: FYI only" in the Triage log, for review.
+
 ## 0.5.0
 - Inbox zero: emails the agent fully handles are archived (never deleted): job alerts once the Career Counsellor has logged them, Oncore timesheet confirmations, bills once the Todoist task exists (or they're autopay), subscription emails once the Subscriptions list is updated, and deliveries.
 - Kept in the inbox: anything urgent, needing a reply, a bill with changed bank details, a subscription that triggered an alert, a delivery problem, or anything that failed.

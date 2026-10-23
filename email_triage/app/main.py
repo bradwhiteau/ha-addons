@@ -354,6 +354,7 @@ class Triage:
         t = self.claude.triage(em)
         t.setdefault("delivery_stage", "none")
         t.setdefault("subscription_event", "none")
+        t.setdefault("fyi_only", False)
         log.info("%s | %s | kind=%s bill=%s urgent=%s reply=%s delivery=%s subscription=%s",
                  em.from_addr, em.subject[:60], t["kind"], t["is_bill"], t["is_urgent"], t["reply_warranted"],
                  t["delivery_stage"], t["subscription_event"])
@@ -507,6 +508,14 @@ class Triage:
             done.append("archived (on the Deliveries board)")
         elif not needs_brad and (bill_handled or sub_handled):
             self.archive_handled(em.uid, done, "on your Todoist list" if bill_handled else "on the Subscriptions list")
+        elif (t["kind"] == "normal" and t["fyi_only"] and not needs_brad and not done
+              and t["delivery_stage"] == "none" and t["subscription_event"] == "none"):
+            # purely informational: archive (or, while on trial, just note that it would have)
+            mode = self.cfg.get("archive_fyi", "trial")
+            if mode == "on":
+                self.archive_handled(em.uid, done, "FYI only")
+            elif mode == "trial":
+                done.append("[trial] would archive: FYI only")
         self.log_row(now, em, t, done)
 
     def log_row(self, now: str, em: Email, t: dict, done: list[str]) -> None:
