@@ -434,14 +434,24 @@ class Triage:
                     )
 
         # 4. deliveries board
-        if self.deliveries and t["kind"] == "normal" and t["delivery_stage"] != "none" and not self.catchup:
-            try:
-                result = self.deliveries.handle(em, t["delivery_stage"])
-            except Exception as exc:
-                log.exception("Deliveries update failed: %s", exc)
-                result = f"Deliveries update FAILED ({str(exc)[:80]})"
-            if result:
-                done.append(result)
+        archive_after = False
+        if self.deliveries and t["kind"] == "normal" and t["delivery_stage"] != "none":
+            ok = True
+            if not self.catchup:  # catch-up: the card was already updated live during dry run
+                try:
+                    result = self.deliveries.handle(em, t["delivery_stage"])
+                except Exception as exc:
+                    log.exception("Deliveries update failed: %s", exc)
+                    result = f"Deliveries update FAILED ({str(exc)[:80]})"
+                    ok = False
+                if result:
+                    done.append(result)
+                ok = ok and bool(result) and not result.startswith("[not live]")
+            # the card holds the details and a link back, so tidy the email away;
+            # problems stay in the inbox, and so does anything urgent or needing a reply
+            if (ok and self.cfg.get("archive_deliveries", True) and t["delivery_stage"] != "problem"
+                    and not t["is_urgent"] and not t["reply_warranted"]):
+                archive_after = True
 
         # 5. subscriptions list
         if self.subscriptions and t["kind"] == "normal" and t["subscription_event"] != "none":
@@ -465,6 +475,9 @@ class Triage:
                     done.append(f"draft saved: {d.get('note_for_brad', '')}")
 
         self.box.add_labels(em.uid, labels)
+        if archive_after:
+            self.box.archive(em.uid)
+            done.append("archived (on the Deliveries board)")
         self.log_row(now, em, t, done)
 
     def log_row(self, now: str, em: Email, t: dict, done: list[str]) -> None:

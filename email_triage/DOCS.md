@@ -7,7 +7,7 @@ Reads each new email in your Gmail inbox the moment it arrives and handles it wi
 | Spam / scams | Moved to Spam and logged. Nothing in it is ever clicked. |
 | Marketing from real companies | Unsubscribed using Gmail's one-click standard, only when Gmail verified the sender, then archived (label `AI/Unsubscribed`, still in All Mail). Anything else from that sender in the next 14 days is archived too, while the unsubscribe takes effect. Otherwise logged as "check manually". |
 | Urgent | Push notification to your phone with the subject and why it matters. Password resets, sign-in codes and passkey/2FA changes always count. Reminders for appointments more than a day away don't. Google "app granted access" alerts for apps on your `known_google_apps` list don't. |
-| Orders and parcels | Card on the Todoist **Deliveries** board, moved between columns as emails arrive (Ordered → On it's way → Arrived, or Follow-ups / Returns, Cancelled / Returned). Each email is added as a comment on the card. |
+| Orders and parcels | Card on the Todoist **Deliveries** board, moved between columns as emails arrive (Ordered → On it's way → Arrived, or Follow-ups / Returns, Cancelled / Returned). Each email is added as a comment on the card, then archived (delivery problems stay in the inbox). |
 | Subscriptions | Todoist **Subscriptions** list kept up to date (see below). |
 | Bills | Todoist task in **Bills**: amount, due date, payment link, BPAY or BSB/account, link to the email. If a regular biller's bank details change, the task and a phone alert are flagged ⚠️. |
 | SEEK job alerts | Sent to the **Career Counsellor** (below). Never unsubscribed. |

@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.4.2
+- Order and parcel emails are archived once they're on the Deliveries board (`archive_deliveries`, on by default). Delivery problems stay in the inbox.
+
 ## 0.4.1
 - New `email_triage_command` option `catch_up` (with `since: YYYY-MM-DD`): re-runs inbox mail that arrived during dry run as it would have gone live. No phone alerts, and anything already handled for real (job alerts, timesheet, deliveries, subscriptions) is just labelled.
 
