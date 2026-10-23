@@ -261,6 +261,13 @@ class Mailbox:
         # "N:*" always returns the highest UID even if it is <= last_uid
         return sorted(u for u in uids if u > last_uid)
 
+    def uids_since(self, day: str) -> list[int]:
+        """Inbox UIDs received on or after `day` (IMAP date, e.g. 19-Oct-2026)."""
+        self.connect()
+        self.conn.select("INBOX")
+        typ, data = self.conn.uid("SEARCH", None, f"SINCE {day}")
+        return sorted(int(x) for x in (data[0] or b"").split())
+
     def fetch(self, uid: int) -> Email | None:
         self.connect()
         self.conn.select("INBOX")

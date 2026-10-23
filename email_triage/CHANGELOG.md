@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.4.1
+- New `email_triage_command` option `catch_up` (with `since: YYYY-MM-DD`): re-runs inbox mail that arrived during dry run as it would have gone live. No phone alerts, and anything already handled for real (job alerts, timesheet, deliveries, subscriptions) is just labelled.
+
 ## 0.4.0
 - New Subscriptions list: emails from subscription services keep Todoist › Subscriptions up to date. Receipts and renewal notices are added as comments on the matching entry; price changes update the amount and buzz your phone; cancellations move the entry to Cancelled; new sign-ups are added under their billing frequency.
 - Phone alert if a cancelled subscription charges you again, or a charge arrives for something not on the list (both land in Needs review).

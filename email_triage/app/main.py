@@ -48,6 +48,7 @@ LABEL_SUBSCRIPTION = "AI/Subscription"
 log = logging.getLogger("triage")
 wake = queue.Queue()
 career_actions = queue.Queue()
+catchup_requests = queue.Queue()
 
 
 # ---------------------------------------------------------------- config & state
@@ -134,6 +135,9 @@ def listen_for_mail_events() -> None:
                         career_actions.put("REASK")
                     elif cmd == "retry_failed":
                         career_actions.put("RETRY")
+                    elif cmd == "catch_up":
+                        catchup_requests.put(str(data.get("since", "")))
+                        wake.put("catch_up")
                     continue
                 log.debug("imap_content: %s | %s", data.get("sender"), data.get("subject"))
                 wake.put("event")
@@ -160,7 +164,47 @@ class Triage:
         self.assistant_live = cfg.get("assistant_live", True)
         self.known_apps = [a.strip().lower() for a in cfg.get("known_google_apps", []) if a and a.strip()]
         self.archive_days = int(cfg.get("archive_after_unsubscribe_days", 14) or 0)
+        self.catchup = False  # True while re-running mail that arrived during dry run
         self.state = load_state()
+
+    def notify(self, *args, **kwargs) -> None:
+        """Phone alert, except during catch-up: those emails are old news."""
+        if self.catchup:
+            args = list(args)
+            if len(args) >= 5:
+                args[4] = True
+            else:
+                kwargs["dry_run"] = True
+        actions.notify(*args, **kwargs)
+
+    def run_catchup(self, since: str) -> None:
+        """Re-run inbox mail that arrived while dry run was on, as it would have gone live."""
+        if self.dry:
+            log.warning("Catch-up skipped: dry run is still on")
+            return
+        try:
+            day = datetime.strptime(since, "%Y-%m-%d").strftime("%d-%b-%Y")
+        except ValueError:
+            log.warning("Catch-up needs since=YYYY-MM-DD, got %r", since)
+            return
+        self.init_position()
+        uids = [u for u in self.box.uids_since(day) if u <= self.state["last_uid"]][:400]
+        log.info("Catch-up: %s inbox email(s) since %s to check", len(uids), since)
+        self.catchup = True
+        done = 0
+        try:
+            for uid in uids:
+                try:
+                    em = self.box.fetch(uid)
+                    if em is not None and LABEL_DONE not in em.gmail_labels:
+                        self.process(em)
+                        done += 1
+                except Exception as exc:
+                    log.exception("Catch-up failed on UID %s: %s", uid, exc)
+                    self.box.close()
+        finally:
+            self.catchup = False
+        log.info("Catch-up finished: %s email(s) processed", done)
 
     # ---------------------------------------------------------- small rules
     def own_google_app(self, em: Email) -> str | None:
@@ -198,6 +242,8 @@ class Triage:
         save_state(self.state)
 
     def tag(self, text: str) -> str:
+        if self.catchup:
+            return f"[catch-up] {text}"
         return f"[dry run] {text}" if self.dry else text
 
     def init_position(self) -> None:
@@ -252,11 +298,19 @@ class Triage:
             return  # Brad's own mail
         now = datetime.now(TZ).strftime("%Y-%m-%d %H:%M")
 
+        # Already handled for real during dry run (assistant_live): just label them
+        if self.catchup and em.from_domain.endswith("oncoreservices.com") and "timesheet received" in em.subject.lower():
+            self.box.add_labels(em.uid, [LABEL_DONE, LABEL_TIMESHEET])
+            return
+        if self.catchup and self.career and em.from_domain.endswith("seek.com.au") and "job" in em.subject.lower():
+            self.box.add_labels(em.uid, [LABEL_DONE, LABEL_JOBS])
+            return
+
         # Oncore confirming it received the weekly timesheet
         if em.from_domain.endswith("oncoreservices.com") and "timesheet received" in em.subject.lower():
             m = re.search(r"period ending\s+(\d{1,2}\s+\w+\s+\d{4})", em.body, re.I)
             period = f" for the week ending {m.group(1)}" if m else ""
-            actions.notify(self.cfg["notify_service"], "✅ Timesheet received",
+            self.notify(self.cfg["notify_service"], "✅ Timesheet received",
                            f"Oncore confirmed it received your timesheet{period}.", em.link,
                            not self.assistant_live, channel="Timesheets", style="timesheet")
             self.box.add_labels(em.uid, [LABEL_DONE, LABEL_TIMESHEET])
@@ -346,7 +400,7 @@ class Triage:
         # 2. urgent alert
         if t["is_urgent"] and t["kind"] != "marketing":
             labels.append(LABEL_URGENT)
-            actions.notify(
+            self.notify(
                 self.cfg["notify_service"],
                 f"📧 Urgent: {em.from_name or em.from_addr}",
                 f"{em.subject}\n{t.get('urgent_reason') or t['summary']}",
@@ -354,7 +408,7 @@ class Triage:
                 self.dry,
                 style="urgent",
             )
-            done.append("phone alert")
+            done.append("urgent (no phone alert: old email)" if self.catchup else "phone alert")
 
         # 3. bills
         if t["is_bill"] and t["kind"] == "normal":
@@ -370,7 +424,7 @@ class Triage:
                 task = actions.add_todoist_task(self.cfg, title, desc, bill.get("due_date"), bool(changed) or t["is_urgent"], self.dry)
                 done.append(f"Todoist: {title}" if task else "Todoist task FAILED")
                 if changed:
-                    actions.notify(
+                    self.notify(
                         self.cfg["notify_service"],
                         "⚠️ Bill bank details changed",
                         f"{bill.get('biller')}: {', '.join(changed)} differ from last time. Verify before paying.",
@@ -380,7 +434,7 @@ class Triage:
                     )
 
         # 4. deliveries board
-        if self.deliveries and t["kind"] == "normal" and t["delivery_stage"] != "none":
+        if self.deliveries and t["kind"] == "normal" and t["delivery_stage"] != "none" and not self.catchup:
             try:
                 result = self.deliveries.handle(em, t["delivery_stage"])
             except Exception as exc:
@@ -392,6 +446,7 @@ class Triage:
         # 5. subscriptions list
         if self.subscriptions and t["kind"] == "normal" and t["subscription_event"] != "none":
             labels.append(LABEL_SUBSCRIPTION)
+        if self.subscriptions and t["kind"] == "normal" and t["subscription_event"] != "none" and not self.catchup:
             try:
                 result = self.subscriptions.handle(em, t["subscription_event"])
             except Exception as exc:
@@ -465,6 +520,8 @@ def main() -> None:
             wake.get_nowait()
         try:
             triage.run_once()
+            while not catchup_requests.empty():
+                triage.run_catchup(catchup_requests.get_nowait())
         except imaplib.IMAP4.error as exc:
             if "AUTHENTICATIONFAILED" in str(exc):
                 log.error("Gmail rejected the login. Check gmail_address and gmail_app_password "
