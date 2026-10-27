@@ -483,7 +483,7 @@ class Triage:
             sub_handled = True
         if self.subscriptions and t["kind"] == "normal" and t["subscription_event"] != "none" and not self.catchup:
             try:
-                result = self.subscriptions.handle(em, t["subscription_event"])
+                result = self.subscriptions.handle(em, t["subscription_event"], is_bill=t["is_bill"])
             except Exception as exc:
                 log.exception("Subscriptions update failed: %s", exc)
                 result = f"Subscriptions update FAILED ({str(exc)[:80]})"

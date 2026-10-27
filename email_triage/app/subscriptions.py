@@ -19,8 +19,12 @@ Card format (Brad's standard, Oct 2026):
                "Review monthly subscriptions" task covers them).
 
 Sections:
-  Annual / Monthly   active, by billing frequency
-  Needs review       anything the agent isn't sure about (incl. weekly/quarterly)
+  Annual / Monthly   active, by billing frequency (Bi-monthly / Quarterly are
+                     created when a household bill such as water or rates needs one)
+  Needs review       anything the agent isn't sure about (incl. weekly)
+
+Household service bills (internet, mobile, electricity, gas, water, council
+rates) are handled by both the Bills flow and this list.
   Cancelled          cancelled subscriptions, kept as a record
 """
 from __future__ import annotations
@@ -37,7 +41,8 @@ from mail import Email
 log = logging.getLogger("subscriptions")
 TZ = ZoneInfo("Australia/Perth")
 
-FREQ_SECTION = {"monthly": "Monthly", "annual": "Annual"}
+FREQ_SECTION = {"monthly": "Monthly", "bimonthly": "Bi-monthly", "quarterly": "Quarterly", "annual": "Annual"}
+FREQ_LABEL = {"bimonthly": "Bi-monthly"}
 REVIEW = "Needs review"
 CANCELLED = "Cancelled"
 DASH = " — "
@@ -189,7 +194,7 @@ class Subscriptions:
 
     flagged = False
 
-    def handle(self, em: Email, event: str) -> str:
+    def handle(self, em: Email, event: str, is_bill: bool = False) -> str:
         self.flagged = False
         if event == "none":
             return ""
@@ -220,7 +225,7 @@ class Subscriptions:
             if plain(s.get("amount")):
                 desc = set_line(desc, amount_key(s.get("currency")), plain(s.get("amount")))
             if freq:
-                desc = set_line(desc, "Frequency", freq.capitalize())
+                desc = set_line(desc, "Frequency", FREQ_LABEL.get(freq, freq.capitalize()))
             if s.get("payment_method"):
                 desc = set_line(desc, "Payment method", s["payment_method"])
             desc = set_line(desc, "Work-use %", "TBC")
@@ -237,7 +242,7 @@ class Subscriptions:
                                              due_date, due_string)
             actions.todoist_comment(self.cfg, task_id, note)
             log.info("Subscription added: %s -> %s", title, target)
-            if target == REVIEW and event == "charged":
+            if target == REVIEW and event == "charged" and not is_bill:  # bills are already surfaced by the Bills flow
                 self.alert("💳 Unlisted subscription charge", f"{title}: not on your Subscriptions list.", em)
             return f"Subscriptions: added '{title}' to {target}"
 
@@ -251,7 +256,15 @@ class Subscriptions:
 
         changed = price_changed(entry["amount"], s.get("amount"), s.get("currency")) if new_amount else False
         if event in ("charged", "price_change", "started") and new_amount:
-            if changed:
+            if changed and s.get("usage_based"):
+                # electricity, water etc. change every bill: record the latest amount quietly
+                changes["content"] = f"{name}{DASH}{new_amount}"
+                desc = set_line(desc, amount_key(s.get("currency")), plain(s.get("amount")))
+                desc = set_line(desc, NOTES, re.sub(r"\s*Latest bill [^.]*\.?", "", get_line(desc, NOTES)).strip()) \
+                    if get_line(desc, NOTES) else desc
+                desc = add_note(desc, f"Latest bill {when}; amount varies with usage.")
+                result = f"Subscriptions: '{name}' latest bill {new_amount}"
+            elif changed:
                 changes["content"] = f"{name}{DASH}{new_amount}"
                 desc = set_line(desc, amount_key(s.get("currency")), plain(s.get("amount")))
                 desc = add_note(desc, f"Previous amount {entry['amount']} (to {when})")
@@ -264,7 +277,7 @@ class Subscriptions:
             elif is_blank(get_line(desc, amount_key(s.get("currency")))):
                 desc = set_line(desc, amount_key(s.get("currency")), plain(s.get("amount")))
         if freq and is_blank(get_line(desc, "Frequency")):
-            desc = set_line(desc, "Frequency", freq.capitalize())
+            desc = set_line(desc, "Frequency", FREQ_LABEL.get(freq, freq.capitalize()))
         if s.get("payment_method"):
             desc = set_line(desc, "Payment method", s["payment_method"])
 

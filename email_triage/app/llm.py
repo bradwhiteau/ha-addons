@@ -89,11 +89,13 @@ TRIAGE_TOOL = {
                 "description": (
                     "If this is from a recurring paid service Brad subscribes to (streaming, music, software, apps, "
                     "cloud storage, password managers, VPNs, games, memberships, Patreon or other recurring "
-                    "donations), what it reports: started (new subscription, free trial or resubscription), "
-                    "charged (receipt or invoice for a payment taken), renewal_upcoming (will renew soon), "
-                    "price_change, trial_ending, payment_failed, cancelled. 'none' for everything else, including "
-                    "marketing and upsells, one-off purchases, and utilities, phone, internet, insurance, rent "
-                    "or loan bills."
+                    "donations), or a recurring household service bill (internet, mobile/phone, electricity, gas, "
+                    "water, council rates), what it reports: started (new subscription, service or account), "
+                    "charged (receipt, invoice or bill for a regular charge, whether paid, due or direct-debited), "
+                    "renewal_upcoming (will renew soon), price_change (new plan price or tariff), trial_ending, "
+                    "payment_failed, cancelled. Household service bills are ALSO bills (is_bill), so set both. "
+                    "'none' for everything else, including marketing and upsells, one-off purchases, and "
+                    "insurance, rent or loan bills."
                 ),
             },
             "urgent_reason": {"type": "string", "description": "If urgent: one short phone-sized line on why and what's needed. Otherwise empty."},
@@ -160,7 +162,14 @@ SUBSCRIPTION_TOOL = {
             "service": {"type": "string", "description": "Short service name, e.g. 'Netflix', 'Patreon (Philly D)'."},
             "amount": {"type": ["number", "null"], "description": "Amount charged or to be charged per period, exactly as stated."},
             "currency": {"type": ["string", "null"], "description": "Three-letter code, e.g. AUD or USD, if stated or clear."},
-            "frequency": {"type": ["string", "null"], "enum": ["weekly", "monthly", "quarterly", "annual", None]},
+            "frequency": {"type": ["string", "null"], "enum": ["weekly", "monthly", "bimonthly", "quarterly", "annual", None]},
+            "usage_based": {
+                "type": "boolean",
+                "description": (
+                    "True if the amount normally changes from bill to bill with usage (electricity, gas, water usage). "
+                    "False for a fixed plan price (streaming, software, internet or mobile plans, council rates)."
+                ),
+            },
             "next_date": {"type": ["string", "null"], "description": "Next renewal, charge or trial-end date as YYYY-MM-DD, or null."},
             "payment_method": {"type": ["string", "null"], "description": "e.g. 'PayPal', 'Visa ending 1234'. Never a full card number."},
             "update": {"type": "string", "description": "One short line on what this email says happened."},

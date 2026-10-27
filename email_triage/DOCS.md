@@ -35,7 +35,7 @@ Every role, including the ones it skipped and why, goes on the **Job matches** t
 
 ## Subscriptions
 
-Emails from recurring paid services (streaming, software, apps, storage, memberships, Patreon and other recurring donations) update Todoist › **Subscriptions**. Utility, phone, internet and insurance bills aren't included; they stay with Bills. Each email is matched to an entry by service name and added to it as a comment, so every entry keeps its own history.
+Emails from recurring paid services (streaming, software, apps, storage, memberships, Patreon and other recurring donations) update Todoist › **Subscriptions**. Household service bills (internet, mobile, electricity, gas, water, council rates) do both: they get a Bills payment task and update their Subscriptions card. Usage-based ones (electricity, gas, water) just record the latest amount, with no price-change alert. Insurance, rent and loan bills stay with Bills only. Each email is matched to an entry by service name and added to it as a comment, so every entry keeps its own history.
 
 Every card uses the same format: title "Service — $amount CUR"; description lines **Amount AUD**, **Amount USD**, **Frequency**, **Payment method**, **Work-use %**, plus an optional **Notes** line. Annual subscriptions carry a recurring yearly due date on the next renewal; monthly ones have no due date.
 
@@ -47,9 +47,9 @@ Every card uses the same format: title "Service — $amount CUR"; description li
 | Trial ending | Comment and "Trial ends" in Notes; due that day unless the card already has a renewal date. |
 | Payment failed | Comment (and an urgent alert, as before). |
 | Cancelled | Moved to **Cancelled**, due date removed. |
-| New sign-up | Added under Monthly or Annual, or moved back there if it was cancelled. Anything else (weekly, quarterly, unknown) goes to Needs review. |
+| New sign-up | Added under Monthly / Bi-monthly / Quarterly / Annual (section created if needed), or moved back there if it was cancelled. Anything else goes to Needs review. |
 | Charged after cancelling | Moved to **Needs review**, phone alert. |
-| Charge for something not on the list | Added to **Needs review**, phone alert. |
+| Charge for something not on the list | Added to **Needs review**, phone alert (no alert for household bills, which Bills already covers). |
 
 If it isn't sure which entry an email belongs to, it adds a new one to Needs review rather than guessing. Entries are only ever added, commented on, renamed or moved; it never deletes or completes them. Runs with `assistant_live`, like Deliveries.
 

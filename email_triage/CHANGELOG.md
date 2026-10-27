@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.6.1
+- Household service bills (internet, mobile, electricity, gas, water, council rates) now go to both Bills (a Todoist payment task, as before) and the Subscriptions list, so their cards stay current. Insurance, rent and loan bills stay Bills-only.
+- Usage-based bills (electricity, gas, water) update the card's amount quietly each time, with no price-change alert. Fixed-price ones (internet, mobile, rates) still alert when the price changes.
+- A household bill not yet on the list goes to Needs review without a phone alert (the Bills flow already covers it).
+- Bi-monthly and Quarterly sections are created when a bill like water or rates needs one.
+
 ## 0.6.0
 - Subscriptions cards now follow the standard format: title "Service — $amount CUR", description lines Amount AUD, Amount USD, Frequency, Payment method, Work-use % (TBC on new cards), and an optional Notes line. Existing cards are tidied into that order whenever an email touches them.
 - Annual subscriptions get a recurring yearly due date on the next renewal (instead of a "Next renewal" line), so the Proactive Check-in can flag them. Monthly ones get no due date.
