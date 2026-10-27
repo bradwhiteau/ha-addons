@@ -257,11 +257,14 @@ def todoist_sections(cfg: dict, project_id: str) -> dict[str, str]:
 
 
 def todoist_create(cfg: dict, content: str, description: str, project_id: str, section_id: str | None,
-                   due_date: str | None = None) -> str:
+                   due_date: str | None = None, due_string: str | None = None) -> str:
     payload = {"content": content, "description": description, "project_id": project_id}
     if section_id:
         payload["section_id"] = section_id
-    if due_date and re.fullmatch(r"\d{4}-\d{2}-\d{2}", due_date):
+    if due_string:
+        payload["due_string"] = due_string
+        payload["due_lang"] = "en"
+    elif due_date and re.fullmatch(r"\d{4}-\d{2}-\d{2}", due_date):
         payload["due_date"] = due_date
     return _todoist(cfg, "POST", "/tasks", json=payload)["id"]
 

@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.6.0
+- Subscriptions cards now follow the standard format: title "Service — $amount CUR", description lines Amount AUD, Amount USD, Frequency, Payment method, Work-use % (TBC on new cards), and an optional Notes line. Existing cards are tidied into that order whenever an email touches them.
+- Annual subscriptions get a recurring yearly due date on the next renewal (instead of a "Next renewal" line), so the Proactive Check-in can flag them. Monthly ones get no due date.
+- Price changes update the Amount AUD/USD line as well as the title; the old price goes into Notes. Trial end dates go into Notes too, and only become the due date if the card has no renewal date.
+- Cancelled cards lose their due date. Weekly and quarterly subscriptions now land in Needs review instead of creating their own sections.
+
 ## 0.5.1
 - New `archive_fyi` (off / trial / on, default trial): purely informational emails that need nothing from you are archived. In trial they're only marked "[trial] would archive: FYI only" in the Triage log, for review.
 

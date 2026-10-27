@@ -3,21 +3,31 @@ subscription emails (sign-ups, receipts, renewals, price changes, trials,
 failed payments, cancellations).
 
 The project itself is the record. Every task is read from Todoist each time,
-so entries Brad adds, edits or moves by hand are matched too. Task names are
-"Service — $amount CUR"; descriptions hold "Key: value" lines (Frequency,
-Payment method, Next renewal, Trial ends, ...). Each email is added as a
-comment, so every entry keeps its own history.
+so entries Brad adds, edits or moves by hand are matched too. Each email is
+added as a comment, so every entry keeps its own history.
+
+Card format (Brad's standard, Oct 2026):
+  Title        "Service — $amount CUR"
+  Description  Amount AUD: ...
+               Amount USD: ...
+               Frequency: ...
+               Payment method: ...
+               Work-use %: ...
+               Notes: ...            (optional)
+  Due date     annual subscriptions only: a recurring yearly due date on the
+               next renewal. Monthly ones have no due date (a quarterly
+               "Review monthly subscriptions" task covers them).
 
 Sections:
-  Monthly / Quarterly / Annual   active, by billing frequency
-  Needs review                   anything the agent isn't sure about
-  Cancelled                      cancelled subscriptions, kept as a record
+  Annual / Monthly   active, by billing frequency
+  Needs review       anything the agent isn't sure about (incl. weekly/quarterly)
+  Cancelled          cancelled subscriptions, kept as a record
 """
 from __future__ import annotations
 
 import logging
 import re
-from datetime import datetime
+from datetime import date, datetime
 from zoneinfo import ZoneInfo
 
 import actions
@@ -27,10 +37,13 @@ from mail import Email
 log = logging.getLogger("subscriptions")
 TZ = ZoneInfo("Australia/Perth")
 
-FREQ_SECTION = {"weekly": "Weekly", "monthly": "Monthly", "quarterly": "Quarterly", "annual": "Annual"}
+FREQ_SECTION = {"monthly": "Monthly", "annual": "Annual"}
 REVIEW = "Needs review"
 CANCELLED = "Cancelled"
 DASH = " — "
+NONE = "—"
+TEMPLATE_KEYS = ["Amount AUD", "Amount USD", "Frequency", "Payment method", "Work-use %"]
+NOTES = "Notes"
 
 
 def split_title(content: str) -> tuple[str, str]:
@@ -46,6 +59,19 @@ def money(amount, currency) -> str:
     except (TypeError, ValueError):
         return ""
     return f"{text} {currency.upper()}" if currency else text
+
+
+def plain(amount) -> str:
+    """Amount as it goes on an 'Amount AUD/USD' line, e.g. 154.00."""
+    try:
+        return f"{float(amount):.2f}"
+    except (TypeError, ValueError):
+        return ""
+
+
+def amount_key(currency) -> str:
+    """Which template line an amount belongs on. Anything not USD is recorded as AUD."""
+    return "Amount USD" if (currency or "").upper() == "USD" else "Amount AUD"
 
 
 def price_changed(old_title_amount: str, amount, currency) -> bool | None:
@@ -67,6 +93,14 @@ def price_changed(old_title_amount: str, amount, currency) -> bool | None:
     return all(abs(n - new) > 0.005 for n in comparable)
 
 
+def get_line(desc: str, key: str) -> str:
+    for line in (desc or "").splitlines():
+        m = re.match(rf"\s*{re.escape(key)}\s*:\s*(.*)$", line, re.I)
+        if m:
+            return m.group(1).strip()
+    return ""
+
+
 def set_line(desc: str, key: str, value: str) -> str:
     """Replace or add a 'Key: value' line in a task description."""
     lines = (desc or "").splitlines()
@@ -75,6 +109,46 @@ def set_line(desc: str, key: str, value: str) -> str:
             lines[i] = f"{key}: {value}"
             return "\n".join(lines)
     return "\n".join(lines + [f"{key}: {value}"]).strip()
+
+
+def is_blank(value: str) -> bool:
+    return value.strip() in ("", NONE, "-", "___", "TBC")
+
+
+def add_note(desc: str, text: str) -> str:
+    """Append to the Notes line (creating it if needed)."""
+    current = get_line(desc, NOTES)
+    if text in current:
+        return desc
+    return set_line(desc, NOTES, f"{current.rstrip('.')}. {text}" if current else text)
+
+
+def tidy(desc: str) -> str:
+    """Put the description in template order: the five standard lines (missing
+    ones filled with a dash), then Notes, then anything else that was there."""
+    lines = (desc or "").splitlines()
+    known = {k.lower(): k for k in TEMPLATE_KEYS + [NOTES]}
+    values: dict[str, str] = {}
+    extra: list[str] = []
+    for line in lines:
+        m = re.match(r"\s*([^:]+?)\s*:\s*(.*)$", line)
+        if m and m.group(1).lower() in known and known[m.group(1).lower()] not in values:
+            values[known[m.group(1).lower()]] = m.group(2).strip()
+        elif line.strip():
+            extra.append(line)
+    out = [f"{k}: {values.get(k) or NONE}" for k in TEMPLATE_KEYS]
+    if values.get(NOTES):
+        out.append(f"{NOTES}: {values[NOTES]}")
+    return "\n".join(out + extra)
+
+
+def yearly(due: str) -> str | None:
+    """Todoist due string for a yearly renewal anchored on a YYYY-MM-DD date."""
+    try:
+        d = date.fromisoformat(due)
+    except (TypeError, ValueError):
+        return None
+    return f"every year starting {d.isoformat()}"
 
 
 class Subscriptions:
@@ -105,7 +179,7 @@ class Subscriptions:
             name, amount = split_title(t.get("content", ""))
             out.append({"id": t["id"], "name": name, "amount": amount, "content": t.get("content", ""),
                         "section": name_of.get(t.get("section_id") or "", ""),
-                        "description": t.get("description", "")})
+                        "description": t.get("description", ""), "due": t.get("due") or {}})
         return out
 
     # ---------------------------------------------------------- handling
@@ -128,6 +202,7 @@ class Subscriptions:
         note = f"{when}: {s.get('update') or event.replace('_', ' ')} ([email]({em.link}))"
         freq = (s.get("frequency") or "").lower()
         new_amount = money(s.get("amount"), s.get("currency"))
+        next_date = s.get("next_date") if re.fullmatch(r"\d{4}-\d{2}-\d{2}", s.get("next_date") or "") else None
 
         idx = s.get("matches")
         entry = entries[idx] if isinstance(idx, int) and 0 <= idx < len(entries) else None
@@ -142,16 +217,24 @@ class Subscriptions:
             else:
                 target = REVIEW  # a charge or notice for something not on the list: let Brad decide
             desc = ""
+            if plain(s.get("amount")):
+                desc = set_line(desc, amount_key(s.get("currency")), plain(s.get("amount")))
             if freq:
                 desc = set_line(desc, "Frequency", freq.capitalize())
             if s.get("payment_method"):
                 desc = set_line(desc, "Payment method", s["payment_method"])
-            if s.get("next_date"):
-                desc = set_line(desc, "Trial ends" if event == "trial_ending" else "Next renewal", s["next_date"])
-            desc = set_line(desc, "Added by", f"email triage, {when}")
+            desc = set_line(desc, "Work-use %", "TBC")
+            due_string = due_date = None
+            if event == "trial_ending" and next_date:
+                desc = add_note(desc, f"Trial ends {next_date}")
+                due_date = next_date
+            elif freq == "annual" and next_date and target != CANCELLED:
+                due_string = yearly(next_date)
+            desc = add_note(desc, f"Added by email triage, {when}")
+            desc = tidy(desc)
             title = f"{name}{DASH}{new_amount}" if new_amount else name
             task_id = actions.todoist_create(self.cfg, title, desc, self.project, self.section_id(sections, target),
-                                             s.get("next_date") if event == "trial_ending" else None)
+                                             due_date, due_string)
             actions.todoist_comment(self.cfg, task_id, note)
             log.info("Subscription added: %s -> %s", title, target)
             if target == REVIEW and event == "charged":
@@ -163,25 +246,39 @@ class Subscriptions:
         changes: dict = {}
         desc = entry["description"]
         result = f"Subscriptions: noted on '{name}'"
+        is_annual = entry["section"] == "annual" or freq == "annual" or get_line(desc, "Frequency").lower() == "annual"
+        recurring = bool(entry["due"].get("is_recurring"))
 
         changed = price_changed(entry["amount"], s.get("amount"), s.get("currency")) if new_amount else False
         if event in ("charged", "price_change", "started") and new_amount:
             if changed:
                 changes["content"] = f"{name}{DASH}{new_amount}"
-                desc = set_line(desc, "Previous amount", entry["amount"])
+                desc = set_line(desc, amount_key(s.get("currency")), plain(s.get("amount")))
+                desc = add_note(desc, f"Previous amount {entry['amount']} (to {when})")
                 self.alert("💲 Subscription price change", f"{name}: {entry['amount']} → {new_amount}", em)
                 result = f"Subscriptions: '{name}' amount now {new_amount} (was {entry['amount']})"
             elif changed is None and "$" not in entry["amount"]:
                 changes["content"] = f"{name}{DASH}{new_amount}"  # fill in a missing amount quietly
+                desc = set_line(desc, amount_key(s.get("currency")), plain(s.get("amount")))
                 result = f"Subscriptions: '{name}' amount recorded as {new_amount}"
+            elif is_blank(get_line(desc, amount_key(s.get("currency")))):
+                desc = set_line(desc, amount_key(s.get("currency")), plain(s.get("amount")))
+        if freq and is_blank(get_line(desc, "Frequency")):
+            desc = set_line(desc, "Frequency", freq.capitalize())
         if s.get("payment_method"):
             desc = set_line(desc, "Payment method", s["payment_method"])
-        if s.get("next_date") and event in ("charged", "renewal_upcoming", "started"):
-            desc = set_line(desc, "Next renewal", s["next_date"])
-        if s.get("next_date") and event == "trial_ending":
-            desc = set_line(desc, "Trial ends", s["next_date"])
-            if re.fullmatch(r"\d{4}-\d{2}-\d{2}", s["next_date"]):
-                changes["due_date"] = s["next_date"]
+
+        # due dates: annual renewals carry a recurring yearly due date on the next renewal
+        if is_annual and next_date and event in ("charged", "renewal_upcoming", "started") \
+                and entry["section"] != CANCELLED.lower():
+            if entry["due"].get("date", "")[:10] != next_date or not recurring:
+                changes["due_string"] = yearly(next_date)
+        if event == "trial_ending" and next_date:
+            desc = add_note(desc, f"Trial ends {next_date}")
+            if not recurring:  # never overwrite a renewal date with a one-off trial date
+                changes["due_date"] = next_date
+
+        desc = tidy(desc)
         if desc != entry["description"]:
             changes["description"] = desc
         if changes:
@@ -199,6 +296,8 @@ class Subscriptions:
             target = FREQ_SECTION.get(freq, REVIEW)  # resubscribed
         if target:
             actions.todoist_move(self.cfg, entry["id"], self.section_id(sections, target))
+            if target == CANCELLED and recurring:
+                actions.todoist_update(self.cfg, entry["id"], due_string="no date")  # cancelled cards have no due date
             log.info("Subscription moved: %s -> %s", name, target)
             result = f"Subscriptions: moved '{name}' to {target}"
         return result

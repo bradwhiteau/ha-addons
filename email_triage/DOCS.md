@@ -37,15 +37,17 @@ Every role, including the ones it skipped and why, goes on the **Job matches** t
 
 Emails from recurring paid services (streaming, software, apps, storage, memberships, Patreon and other recurring donations) update Todoist › **Subscriptions**. Utility, phone, internet and insurance bills aren't included; they stay with Bills. Each email is matched to an entry by service name and added to it as a comment, so every entry keeps its own history.
 
+Every card uses the same format: title "Service — $amount CUR"; description lines **Amount AUD**, **Amount USD**, **Frequency**, **Payment method**, **Work-use %**, plus an optional **Notes** line. Annual subscriptions carry a recurring yearly due date on the next renewal; monthly ones have no due date.
+
 | Email says | What happens |
 |---|---|
-| Receipt / payment taken | Comment. If the amount differs from the one in the entry's name (same currency), the name is updated, the old amount kept as "Previous amount", and your phone is alerted. |
+| Receipt / payment taken | Comment. If the amount differs from the one in the title (same currency), the title and Amount line are updated, the old amount noted in Notes, and your phone is alerted. For annual subscriptions, the due date moves to the next renewal if the email gives one. |
 | Price change | As above. |
-| Renewing soon | Comment, and "Next renewal" in the description. |
-| Trial ending | Comment, "Trial ends" in the description, and the entry is due that day. |
+| Renewing soon | Comment; for annual subscriptions, the recurring due date is set to the renewal date. |
+| Trial ending | Comment and "Trial ends" in Notes; due that day unless the card already has a renewal date. |
 | Payment failed | Comment (and an urgent alert, as before). |
-| Cancelled | Moved to **Cancelled**. |
-| New sign-up | Added under Monthly / Quarterly / Annual (the section is created if needed), or moved back there if it was cancelled. |
+| Cancelled | Moved to **Cancelled**, due date removed. |
+| New sign-up | Added under Monthly or Annual, or moved back there if it was cancelled. Anything else (weekly, quarterly, unknown) goes to Needs review. |
 | Charged after cancelling | Moved to **Needs review**, phone alert. |
 | Charge for something not on the list | Added to **Needs review**, phone alert. |
 
