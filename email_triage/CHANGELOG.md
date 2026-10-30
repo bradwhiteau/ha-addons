@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.8.1
+- New label **AI/Keep list** on marketing from senders on your `never_unsubscribe` list.
+
 ## 0.8.0
 - New label **AI/Needs you** on every email the agent deliberately leaves in your inbox, so you can tell at a glance it was triaged and is waiting on you. The other labels say why (AI/Urgent, AI/Draft ready, AI/Bill...).
 - New label **AI/Unsubscribe manually** for marketing that couldn't be unsubscribed automatically.

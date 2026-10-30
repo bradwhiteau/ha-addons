@@ -24,7 +24,7 @@ Purely informational emails (completed DocuSigns, privacy-policy updates, applic
 
 ## Labels at a glance
 
-Every email the agent touches gets `AI/Triaged`. Anything it leaves in your inbox on purpose also gets `AI/Needs you`, plus a reason label: `AI/Urgent`, `AI/Draft ready`, `AI/Bill` (e.g. changed bank details), `AI/Unsubscribe manually`, or none if it's simply worth a read. Search `label:ai-needs-you` for everything waiting on you.
+Every email the agent touches gets `AI/Triaged`. Anything it leaves in your inbox on purpose also gets `AI/Needs you`, plus a reason label: `AI/Urgent`, `AI/Draft ready`, `AI/Bill` (e.g. changed bank details), `AI/Unsubscribe manually`, `AI/Keep list` (a sender you chose to keep), or none if it's simply worth a read. Search `label:ai-needs-you` for everything waiting on you.
 
 ## Career Counsellor
 

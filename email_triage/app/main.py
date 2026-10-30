@@ -46,6 +46,7 @@ LABEL_TIMESHEET = "AI/Timesheet confirmed"
 LABEL_SUBSCRIPTION = "AI/Subscription"
 LABEL_NEEDS_YOU = "AI/Needs you"            # triaged and deliberately left in the inbox for Brad
 LABEL_UNSUB_MANUAL = "AI/Unsubscribe manually"
+LABEL_KEEP = "AI/Keep list"                 # sender is on never_unsubscribe
 
 log = logging.getLogger("triage")
 wake = queue.Queue()
@@ -471,6 +472,7 @@ class Triage:
             archive = False
             already = None if protected else self.recently_unsubscribed(em.from_addr)
             if protected:
+                labels.append(LABEL_KEEP)
                 action = "Not unsubscribed: sender is on your keep list"
             elif already:
                 # unsubscribes can take a few days to stick; tidy away stragglers meanwhile
