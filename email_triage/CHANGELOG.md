@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.7.0
+- Job application updates (interview, offer, rejection, "not progressing") always alert your phone (💼 Application update) and stay in the inbox; they're never treated as FYI.
+- Fix: long SEEK alerts (e.g. 9 jobs) could come back as "no jobs found" and be archived. The job list now has room, and an alert that can't be read stays in the inbox.
+- Only SEEK's job-alert address goes to the Career Counsellor.
+- New `email_triage_command` option `rerun_jobs` (with `since: YYYY-MM-DD`) re-runs inbox job alerts.
+
 ## 0.6.1
 - Household service bills (internet, mobile, electricity, gas, water, council rates) now go to both Bills (a Todoist payment task, as before) and the Subscriptions list, so their cards stay current. Insurance, rent and loan bills stay Bills-only.
 - Usage-based bills (electricity, gas, water) update the card's amount quietly each time, with no price-change alert. Fixed-price ones (internet, mobile, rates) still alert when the price changes.

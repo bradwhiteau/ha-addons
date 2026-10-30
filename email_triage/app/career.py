@@ -47,7 +47,7 @@ EXTRACT_TOOL = {
                         "company": {"type": "string"},
                         "location": {"type": "string"},
                         "pay_or_type": {"type": "string", "description": "Salary/rate and contract/permanent/full-time if shown, else empty."},
-                        "summary": {"type": "string", "description": "The listing's teaser text, as shown."},
+                        "summary": {"type": "string", "description": "The listing's teaser text, trimmed to under 200 characters."},
                         "url": {"type": "string", "description": "The link for this job (the URL in [brackets] after its title), exactly as written."},
                     },
                     "required": ["title", "company", "location", "pay_or_type", "summary", "url"],
@@ -196,10 +196,11 @@ class Career:
         extracted = self.claude._call(
             self.claude.triage_model, system,
             f"<email>\nSubject: {em.subject}\n\n{source}\n</email>\n\nList every job in this alert.",
-            EXTRACT_TOOL, 3000,
+            EXTRACT_TOOL, 8000,
         ).get("jobs", [])
         if not extracted:
-            return "job alert: no jobs found"
+            # never quietly archive an alert we couldn't read
+            raise RuntimeError("no jobs could be read from this alert")
 
         with self.lock:
             store = self._load()

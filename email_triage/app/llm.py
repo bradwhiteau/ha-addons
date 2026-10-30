@@ -67,6 +67,8 @@ TRIAGE_TOOL = {
                     "Always urgent: password reset emails, sign-in or verification codes, and changes to passwords, passkeys "
                     "or two-factor settings, even if Brad may have triggered them himself (if he did, the alert is harmless; "
                     "if he didn't, he must know now). "
+                    "Always urgent: any update on a job application Brad made (an interview invitation, offer, "
+                    "rejection, 'unsuccessful' or 'not progressing' notice), whether from SEEK, a recruiter or an employer. "
                     "Not urgent: reminders of an existing appointment or booking that is more than a day away (it isn't a "
                     "change, and it can wait for his daily check-in). Words like 'URGENT' in a marketing or unknown "
                     "sender's subject do not count."
@@ -112,7 +114,8 @@ TRIAGE_TOOL = {
                     "submitted' confirmation, a 'your account was updated' notice for a change he clearly made, a "
                     "routine digest. False if it asks him to do anything, has a date or deadline he should know about, "
                     "is from a real person, is about money owed or a security change he may not have made, or is "
-                    "something he'd plausibly want to read soon. When unsure, False."
+                    "something he'd plausibly want to read soon. Never FYI: any update on a job application other than "
+                    "the plain 'application submitted' confirmation. When unsure, False."
                 ),
             },
         },

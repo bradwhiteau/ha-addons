@@ -138,6 +138,9 @@ def listen_for_mail_events() -> None:
                     elif cmd == "catch_up":
                         catchup_requests.put(str(data.get("since", "")))
                         wake.put("catch_up")
+                    elif cmd == "rerun_jobs":
+                        catchup_requests.put("jobs:" + str(data.get("since", "")))
+                        wake.put("catch_up")
                     continue
                 log.debug("imap_content: %s | %s", data.get("sender"), data.get("subject"))
                 wake.put("event")
@@ -178,7 +181,10 @@ class Triage:
         actions.notify(*args, **kwargs)
 
     def run_catchup(self, since: str) -> None:
-        """Re-run inbox mail that arrived while dry run was on, as it would have gone live."""
+        """Re-run inbox mail that arrived while dry run was on, as it would have gone live.
+        With a "jobs:" prefix, re-run only SEEK job alerts, for real (e.g. after a failed read)."""
+        jobs_only = since.startswith("jobs:")
+        since = since.removeprefix("jobs:")
         if self.dry:
             log.warning("Catch-up skipped: dry run is still on")
             return
@@ -190,13 +196,13 @@ class Triage:
         self.init_position()
         uids = [u for u in self.box.uids_since(day) if u <= self.state["last_uid"]][:400]
         log.info("Catch-up: %s inbox email(s) since %s to check", len(uids), since)
-        self.catchup = True
+        self.catchup = not jobs_only
         done = 0
         try:
             for uid in uids:
                 try:
                     em = self.box.fetch(uid)
-                    if em is not None and LABEL_DONE not in em.gmail_labels:
+                    if em is not None and LABEL_DONE not in em.gmail_labels and (not jobs_only or self.is_job_alert(em)):
                         self.process(em)
                         done += 1
                 except Exception as exc:
@@ -215,6 +221,21 @@ class Triage:
             return None
         body = em.body.lower()
         return next((a for a in self.known_apps if a in body), None)
+
+    @staticmethod
+    def is_job_alert(em: Email) -> bool:
+        return em.from_domain.endswith("seek.com.au") and em.from_addr.startswith("jobmail@") and "job" in em.subject.lower()
+
+    @staticmethod
+    def is_application_update(em: Email) -> bool:
+        """SEEK telling Brad how an application went (not the 'submitted' confirmation)."""
+        if not em.from_domain.endswith("seek.com.au") or em.from_addr.startswith("jobmail@"):
+            return False
+        subj = em.subject.lower()
+        if "application" not in subj or "application submitted" in subj:
+            return False
+        return "application update" in subj or bool(
+            re.search(r"unsuccessful|not progress|unlikely to progress|interview|offer", subj + " " + em.body[:1500].lower()))
 
     def recently_unsubscribed(self, addr: str) -> str | None:
         """Date Brad was unsubscribed from this sender, if within the archive window."""
@@ -311,7 +332,7 @@ class Triage:
             self.box.add_labels(em.uid, [LABEL_DONE, LABEL_TIMESHEET])
             self.archive_handled(em.uid)
             return
-        if self.catchup and self.career and em.from_domain.endswith("seek.com.au") and "job" in em.subject.lower():
+        if self.catchup and self.career and self.is_job_alert(em):
             self.box.add_labels(em.uid, [LABEL_DONE, LABEL_JOBS])
             self.archive_handled(em.uid)
             return
@@ -335,7 +356,7 @@ class Triage:
             return
 
         # SEEK job alerts go to the Career Counsellor, never to unsubscribe
-        if self.career and em.from_domain.endswith("seek.com.au") and "job" in em.subject.lower():
+        if self.career and self.is_job_alert(em):
             try:
                 result = self.career.handle_alert(em)
             except Exception as exc:
@@ -361,6 +382,13 @@ class Triage:
 
         labels = [LABEL_DONE]
         done: list[str] = []
+
+        # job application outcomes always reach Brad's phone and stay in the inbox
+        app_update = self.is_application_update(em)
+        if app_update:
+            t["is_urgent"] = True
+            t["fyi_only"] = False
+            t["kind"] = "normal"
 
         # Brad's own Apps Script projects trigger Google "granted access" alerts: not urgent
         own_app = self.own_google_app(em)
@@ -421,11 +449,11 @@ class Triage:
             labels.append(LABEL_URGENT)
             self.notify(
                 self.cfg["notify_service"],
-                f"📧 Urgent: {em.from_name or em.from_addr}",
+                "💼 Application update" if app_update else f"📧 Urgent: {em.from_name or em.from_addr}",
                 f"{em.subject}\n{t.get('urgent_reason') or t['summary']}",
                 em.link,
                 self.dry,
-                style="urgent",
+                style="job" if app_update else "urgent",
             )
             done.append("urgent (no phone alert: old email)" if self.catchup else "phone alert")
 
