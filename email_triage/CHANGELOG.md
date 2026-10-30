@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.7.1
+- Fix: Gmail sometimes accepted an archive for brand-new mail but left it in the inbox. Every archive is now re-checked on the next sweep and, if the email is still there, archived again by moving it to All Mail (up to 3 tries within the hour).
+
 ## 0.7.0
 - Job application updates (interview, offer, rejection, "not progressing") always alert your phone (💼 Application update) and stay in the inbox; they're never treated as FYI.
 - Fix: long SEEK alerts (e.g. 9 jobs) could come back as "no jobs found" and be archived. The job list now has room, and an alert that can't be read stays in the inbox.

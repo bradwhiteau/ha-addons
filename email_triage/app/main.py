@@ -262,11 +262,51 @@ class Triage:
                 del unsub[a]
         save_state(self.state)
 
-    def archive_handled(self, uid: int, done: list | None = None, why: str = "handled") -> None:
+    def archive_email(self, em: Email) -> None:
+        """Archive, and remember it so a later sweep can confirm it really left the inbox
+        (Gmail sometimes accepts the change for brand-new mail without applying it)."""
+        self.box.archive(em.uid)
+        if self.dry:
+            return
+        pending = self.state.setdefault("archive_check", {})
+        pending[em.message_id] = {"at": time.time(), "tries": 0, "subject": em.subject[:80]}
+        save_state(self.state)
+
+    def verify_archives(self) -> None:
+        pending = self.state.get("archive_check") or {}
+        if not pending:
+            return
+        now = time.time()
+        for mid, info in list(pending.items()):
+            if now - info["at"] < 120:
+                continue  # give Gmail a couple of minutes first
+            if now - info["at"] > 3600 or info["tries"] >= 3:
+                pending.pop(mid, None)  # stop after an hour, in case Brad moved it back on purpose
+                if info["tries"] >= 3:
+                    log.warning("Could not archive '%s' after 3 tries", info.get("subject"))
+                continue
+            try:
+                uid = self.box.inbox_uid(mid)
+            except Exception as exc:
+                log.debug("Archive check failed for %s: %s", mid, exc)
+                continue
+            if uid is None:
+                pending.pop(mid, None)  # gone from the inbox: archived as intended
+                continue
+            info["tries"] += 1
+            info["at"] = now - 60  # check again on the next sweep
+            log.info("Still in inbox, archiving again: %s", info.get("subject"))
+            self.box.archive_by_move(uid)
+        save_state(self.state)
+
+    def archive_handled(self, uid: int, done: list | None = None, why: str = "handled", em: Email | None = None) -> None:
         """Inbox zero: once the agent has fully dealt with an email, archive it (never deleted)."""
         if not self.cfg.get("archive_handled", True):
             return
-        self.box.archive(uid)
+        if em is not None:
+            self.archive_email(em)
+        else:
+            self.box.archive(uid)
         if done is not None:
             done.append(f"archived ({why})")
 
@@ -285,6 +325,7 @@ class Triage:
 
     def run_once(self) -> None:
         self.init_position()
+        self.verify_archives()
         uids = self.box.uids_after(self.state["last_uid"])
         for uid in uids:
             done = self.handle_uid(uid)
@@ -330,11 +371,11 @@ class Triage:
         # Already handled for real during dry run (assistant_live): just label them
         if self.catchup and em.from_domain.endswith("oncoreservices.com") and "timesheet received" in em.subject.lower():
             self.box.add_labels(em.uid, [LABEL_DONE, LABEL_TIMESHEET])
-            self.archive_handled(em.uid)
+            self.archive_handled(em.uid, em=em)
             return
         if self.catchup and self.career and self.is_job_alert(em):
             self.box.add_labels(em.uid, [LABEL_DONE, LABEL_JOBS])
-            self.archive_handled(em.uid)
+            self.archive_handled(em.uid, em=em)
             return
 
         # Oncore confirming it received the weekly timesheet
@@ -347,7 +388,7 @@ class Triage:
             self.box.add_labels(em.uid, [LABEL_DONE, LABEL_TIMESHEET])
             tick = "phone tick" if self.assistant_live else "[not live] phone tick"
             if self.assistant_live and self.cfg.get("archive_handled", True):
-                self.archive_handled(em.uid)
+                self.archive_handled(em.uid, em=em)
                 tick += "; archived"
             actions.sheet_log(self.cfg, "Triage log", [
                 now, em.from_name, em.from_addr, em.subject, "timesheet", "", f"Oncore timesheet confirmation{period}",
@@ -365,7 +406,7 @@ class Triage:
             self.box.add_labels(em.uid, [LABEL_DONE, LABEL_JOBS])
             if (self.assistant_live and self.cfg.get("archive_handled", True)
                     and not str(result).startswith(("Career Counsellor failed", "[not live]"))):
-                self.archive_handled(em.uid)  # every role is on the Job matches tab
+                self.archive_handled(em.uid, em=em)  # every role is on the Job matches tab
                 result = f"{result}; archived"
             actions.sheet_log(self.cfg, "Triage log", [
                 now, em.from_name, em.from_addr, em.subject, "job alert", "", "Sent to Career Counsellor", result, em.link,
@@ -440,7 +481,7 @@ class Triage:
             ])
             if archive:
                 self.box.add_labels(em.uid, labels)
-                self.box.archive(em.uid)
+                self.archive_email(em)
                 self.log_row(now, em, t, done)
                 return
 
@@ -532,16 +573,16 @@ class Triage:
         self.box.add_labels(em.uid, labels)
         needs_brad = t["is_urgent"] or t["reply_warranted"] or (t["is_bill"] and not bill_handled)
         if archive_after and self.cfg.get("archive_handled", True):
-            self.box.archive(em.uid)
+            self.archive_email(em)
             done.append("archived (on the Deliveries board)")
         elif not needs_brad and (bill_handled or sub_handled):
-            self.archive_handled(em.uid, done, "on your Todoist list" if bill_handled else "on the Subscriptions list")
+            self.archive_handled(em.uid, done, em=em, why="on your Todoist list" if bill_handled else "on the Subscriptions list")
         elif (t["kind"] == "normal" and t["fyi_only"] and not needs_brad and not done
               and t["delivery_stage"] == "none" and t["subscription_event"] == "none"):
             # purely informational: archive (or, while on trial, just note that it would have)
             mode = self.cfg.get("archive_fyi", "trial")
             if mode == "on":
-                self.archive_handled(em.uid, done, "FYI only")
+                self.archive_handled(em.uid, done, em=em, why="FYI only")
             elif mode == "trial":
                 done.append("[trial] would archive: FYI only")
         self.log_row(now, em, t, done)

@@ -224,7 +224,7 @@ class Mailbox:
         self.conn = None
 
     def _find_special_folders(self) -> dict[str, str]:
-        found = {"spam": "[Gmail]/Spam", "drafts": "[Gmail]/Drafts"}
+        found = {"spam": "[Gmail]/Spam", "drafts": "[Gmail]/Drafts", "all": "[Gmail]/All Mail"}
         typ, data = self.conn.list()
         for line in data or []:
             s = line.decode(errors="replace") if isinstance(line, bytes) else str(line)
@@ -237,6 +237,8 @@ class Mailbox:
                 found["spam"] = name
             if "\\Drafts" in flags:
                 found["drafts"] = name
+            if "\\All" in flags:
+                found["all"] = name
         return found
 
     @staticmethod
@@ -309,6 +311,27 @@ class Mailbox:
         typ, data = self.conn.uid("STORE", str(uid), "-X-GM-LABELS", "(\\Inbox)")
         if typ != "OK":
             log.warning("Archiving UID %s failed: %s", uid, data)
+
+    def inbox_uid(self, message_id: str) -> int | None:
+        """UID of this message if it is (still) in the inbox, else None."""
+        self.connect()
+        self.conn.select("INBOX")
+        mid = message_id.strip()
+        if not mid or '"' in mid:
+            return None
+        typ, data = self.conn.uid("SEARCH", None, "HEADER", "Message-ID", f'"{mid}"')
+        uids = [int(x) for x in (data[0] or b"").split()] if typ == "OK" else []
+        return uids[-1] if uids else None
+
+    def archive_by_move(self, uid: int):
+        """Fallback archive: move the message to All Mail, which drops the Inbox label."""
+        if self.dry_run:
+            return
+        self.connect()
+        self.conn.select("INBOX")
+        typ, data = self.conn.uid("MOVE", str(uid), self._q(self._special.get("all", "[Gmail]/All Mail")))
+        if typ != "OK":
+            log.warning("Archive (move) of UID %s failed: %s", uid, data)
 
     def move_to_spam(self, uid: int):
         if self.dry_run:
