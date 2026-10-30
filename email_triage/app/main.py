@@ -44,7 +44,7 @@ LABEL_DRAFT = "AI draft"
 LABEL_JOBS = "AI/Job alert"
 LABEL_TIMESHEET = "AI/Timesheet confirmed"
 LABEL_SUBSCRIPTION = "AI/Subscription"
-LABEL_NEEDS_YOU = "AI/Needs you"            # triaged and deliberately left in the inbox for Brad
+LABEL_NEEDS_YOU = "AI/Attention"            # triaged and deliberately left in the inbox for Brad
 LABEL_UNSUB_MANUAL = "AI/Unsubscribe manually"
 LABEL_KEEP = "AI/Keep list"                 # sender is on never_unsubscribe
 
@@ -368,11 +368,12 @@ class Triage:
 
     def process(self, em: Email) -> None:
         """Triage one email; anything handled but deliberately left in the inbox also gets
-        AI/Needs you, so Brad can see at a glance it was looked at and is waiting on him."""
+        AI/Attention, so Brad can see at a glance it was looked at and is waiting on him."""
         self._archived = False
         self._touched = False
+        self._kept = False
         self._process(em)
-        if self._touched and not self._archived and self.cfg.get("label_needs_you", True):
+        if self._touched and not self._archived and not self._kept and self.cfg.get("label_needs_you", True):
             self.box.add_labels(em.uid, [LABEL_NEEDS_YOU])
 
     def _process(self, em: Email) -> None:
@@ -473,6 +474,7 @@ class Triage:
             already = None if protected else self.recently_unsubscribed(em.from_addr)
             if protected:
                 labels.append(LABEL_KEEP)
+                self._kept = True  # his own choice to keep it: AI/Keep list says enough
                 action = "Not unsubscribed: sender is on your keep list"
             elif already:
                 # unsubscribes can take a few days to stick; tidy away stragglers meanwhile

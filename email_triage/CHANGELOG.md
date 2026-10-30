@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.8.2
+- AI/Needs you is renamed **AI/Attention**.
+- Keep-list senders get AI/Keep list only, not AI/Attention.
+
 ## 0.8.1
 - New label **AI/Keep list** on marketing from senders on your `never_unsubscribe` list.
 
