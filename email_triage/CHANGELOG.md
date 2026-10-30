@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.8.0
+- New label **AI/Needs you** on every email the agent deliberately leaves in your inbox, so you can tell at a glance it was triaged and is waiting on you. The other labels say why (AI/Urgent, AI/Draft ready, AI/Bill...).
+- New label **AI/Unsubscribe manually** for marketing that couldn't be unsubscribed automatically.
+
 ## 0.7.1
 - Fix: Gmail sometimes accepted an archive for brand-new mail but left it in the inbox. Every archive is now re-checked on the next sweep and, if the email is still there, archived again by moving it to All Mail (up to 3 tries within the hour).
 

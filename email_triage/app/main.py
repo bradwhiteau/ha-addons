@@ -44,6 +44,8 @@ LABEL_DRAFT = "AI draft"
 LABEL_JOBS = "AI/Job alert"
 LABEL_TIMESHEET = "AI/Timesheet confirmed"
 LABEL_SUBSCRIPTION = "AI/Subscription"
+LABEL_NEEDS_YOU = "AI/Needs you"            # triaged and deliberately left in the inbox for Brad
+LABEL_UNSUB_MANUAL = "AI/Unsubscribe manually"
 
 log = logging.getLogger("triage")
 wake = queue.Queue()
@@ -266,6 +268,7 @@ class Triage:
         """Archive, and remember it so a later sweep can confirm it really left the inbox
         (Gmail sometimes accepts the change for brand-new mail without applying it)."""
         self.box.archive(em.uid)
+        self._archived = True
         if self.dry:
             return
         pending = self.state.setdefault("archive_check", {})
@@ -307,6 +310,7 @@ class Triage:
             self.archive_email(em)
         else:
             self.box.archive(uid)
+            self._archived = True
         if done is not None:
             done.append(f"archived ({why})")
 
@@ -362,10 +366,20 @@ class Triage:
             return False
 
     def process(self, em: Email) -> None:
+        """Triage one email; anything handled but deliberately left in the inbox also gets
+        AI/Needs you, so Brad can see at a glance it was looked at and is waiting on him."""
+        self._archived = False
+        self._touched = False
+        self._process(em)
+        if self._touched and not self._archived and self.cfg.get("label_needs_you", True):
+            self.box.add_labels(em.uid, [LABEL_NEEDS_YOU])
+
+    def _process(self, em: Email) -> None:
         if LABEL_DONE in em.gmail_labels:
             return
         if em.from_addr == self.cfg["gmail_address"].lower():
             return  # Brad's own mail
+        self._touched = True
         now = datetime.now(TZ).strftime("%Y-%m-%d %H:%M")
 
         # Already handled for real during dry run (assistant_live): just label them
@@ -441,6 +455,7 @@ class Triage:
         if t["kind"] == "spam":
             self.box.add_labels(em.uid, labels)
             self.box.move_to_spam(em.uid)
+            self._archived = True  # out of the inbox
             done.append("moved to Spam")
             actions.sheet_log(self.cfg, "Unsubscribes", [
                 now, em.from_name, em.from_addr, em.subject, self.tag("Marked as spam (not unsubscribed)"), em.link, t["summary"],
@@ -475,6 +490,8 @@ class Triage:
                 action = "Not unsubscribed (auto-unsubscribe is off)"
             else:
                 action = f"Not unsubscribed: {why} - check manually"
+            if "check manually" in action:
+                labels.append(LABEL_UNSUB_MANUAL)
             done.append(action)
             actions.sheet_log(self.cfg, "Unsubscribes", [
                 now, em.from_name, em.from_addr, em.subject, self.tag(action), em.link, t["summary"],
