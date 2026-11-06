@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.8.3
+- Archiving now moves the email to All Mail straight away (the method that works), so handled mail leaves the inbox immediately. Labels are kept. The safety-net re-check stays, alternating methods if Gmail ever ignores one.
+
 ## 0.8.2
 - AI/Needs you is renamed **AI/Attention**.
 - Keep-list senders get AI/Keep list only, not AI/Attention.

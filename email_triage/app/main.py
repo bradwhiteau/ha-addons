@@ -300,7 +300,8 @@ class Triage:
             info["tries"] += 1
             info["at"] = now - 60  # check again on the next sweep
             log.info("Still in inbox, archiving again: %s", info.get("subject"))
-            self.box.archive_by_move(uid)
+            # alternate methods on each retry, in case one is being ignored
+            (self.box.archive_by_move if info["tries"] % 2 else self.box.archive_by_label)(uid)
         save_state(self.state)
 
     def archive_handled(self, uid: int, done: list | None = None, why: str = "handled", em: Email | None = None) -> None:

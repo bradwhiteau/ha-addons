@@ -302,15 +302,31 @@ class Mailbox:
             log.warning("Labelling UID %s failed: %s", uid, data)
 
     def archive(self, uid: int):
-        """Gmail archive: drop the Inbox label. Nothing is deleted."""
+        """Gmail archive: move the message to All Mail, which drops the Inbox label and keeps
+        every other label. Nothing is deleted. (Removing the Inbox label with STORE was
+        silently ignored by Gmail for most new mail, so MOVE comes first.)"""
         if self.dry_run:
             log.info("[dry run] would archive UID %s", uid)
             return
         self.connect()
         self.conn.select("INBOX")
+        typ, data = self.conn.uid("MOVE", str(uid), self._q(self._special.get("all", "[Gmail]/All Mail")))
+        if typ == "OK":
+            return
+        log.info("Archive by move failed for UID %s (%s); trying label removal", uid, data)
         typ, data = self.conn.uid("STORE", str(uid), "-X-GM-LABELS", "(\\Inbox)")
         if typ != "OK":
             log.warning("Archiving UID %s failed: %s", uid, data)
+
+    def archive_by_label(self, uid: int):
+        """Second method for the safety net: remove the Inbox label directly."""
+        if self.dry_run:
+            return
+        self.connect()
+        self.conn.select("INBOX")
+        typ, data = self.conn.uid("STORE", str(uid), "-X-GM-LABELS", "(\\Inbox)")
+        if typ != "OK":
+            log.warning("Archive (label) of UID %s failed: %s", uid, data)
 
     def inbox_uid(self, message_id: str) -> int | None:
         """UID of this message if it is (still) in the inbox, else None."""
